@@ -21,7 +21,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    log_init(config.log_path);
+    if (log_init(config.log_path) != 0) {
+        printf("failed to open log file\n");
+        return 1;
+    }
     log_info("server config loaded");
     log_info("document root loaded");
 

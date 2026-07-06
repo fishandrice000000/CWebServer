@@ -7,6 +7,7 @@ int log_init(const char *path)
 {
     log_file = fopen(path, "a");
     if (log_file == NULL) {
+        fprintf(stderr, "failed to open log file: %s\n", path);
         return -1;
     }
     return 0;
