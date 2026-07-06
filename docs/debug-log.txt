@@ -1,0 +1,12 @@
+# Debug Log - W1D1 V0.1
+# 记录编译、运行、调试过程中出现的问题
+#
+# 格式：
+# # 使用的命令
+# # 报错内容
+# # 解决方法
+#
+# 例如：
+# gdb ./mini_web_server
+# run config/server.conf
+#
