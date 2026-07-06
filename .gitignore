@@ -28,3 +28,6 @@ config/bad_log.conf
 # OS
 .DS_Store
 Thumbs.db
+
+# Course Report
+docs/report/*
