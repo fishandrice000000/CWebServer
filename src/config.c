@@ -3,7 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-static void remove_newline(char *text) {【todo】}
+static void remove_newline(char *text)
+{
+    char *p = strchr(text, '\n');
+    if (p) *p = '\0';
+}
 
 int load_config(const char *path, server_config_t *config) {
     FILE *fp = fopen(path, "r");
@@ -23,10 +27,15 @@ int load_config(const char *path, server_config_t *config) {
 
         if (strcmp(key, "server_name") == 0) {
             strncpy(config->server_name, value, sizeof(config->server_name) - 1);
-        } else if (strcmp(key, "host") == 0) {【todo】
-        } else if (strcmp(key, "port") == 0) {【todo】
-        } else if (strcmp(key, "root") == 0) {【todo】
-        } else if (strcmp(key, "log") == 0) {【todo】}
+        } else if (strcmp(key, "host") == 0) {
+            strncpy(config->host, value, sizeof(config->host) - 1);
+        } else if (strcmp(key, "port") == 0) {
+            config->port = atoi(value);
+        } else if (strcmp(key, "root") == 0) {
+            strncpy(config->root, value, sizeof(config->root) - 1);
+        } else if (strcmp(key, "log") == 0) {
+            strncpy(config->log_path, value, sizeof(config->log_path) - 1);
+        }
     }
 
     fclose(fp);
