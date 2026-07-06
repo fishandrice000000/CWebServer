@@ -7,7 +7,7 @@
 int main(int argc, char *argv[])
 {
     server_config_t config;
-    char            response[64];
+    char            response[256];
 
     if (argc != 2) {
         printf("usage: %s conf/server.conf\n", argv[0]);
