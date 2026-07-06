@@ -6,7 +6,57 @@
 # # 报错内容
 # # 解决方法
 #
-# 例如：
-# gdb ./mini_web_server
-# run config/server.conf
-#
+
+## 问题 1：config.c 中 TODO 占位符导致编译失败
+
+# 使用的命令
+make
+
+# 报错内容
+src/config.c:6:41: error: stray '\343' in program
+    6 | static void remove_newline(char *text) {【todo】}
+      |                                         ^~~~~~~~
+src/config.c:6:43: error: 'todo' undeclared (first use in this function)
+src/config.c:6:47: error: expected ';' before '}' token
+src/config.c:26:47: error: stray '\343' in program
+   26 |         } else if (strcmp(key, "host") == 0) {【todo】
+      |                                               ^~~~~~~~
+...（port、root、log 分支同样报错）
+
+# 原因
+PPT 提供的骨架代码中，remove_newline 函数体和 host/port/root/log
+四个配置项分支均以 "【todo】" 占位，不是合法的 C 语句。
+
+# 解决方法
+1. 实现 remove_newline：用 strchr 找到 '\n' 并替换为 '\0'，去除 fgets 读入的换行符
+2. 补全四个配置项分支：
+   - host  → strncpy 拷贝到 config->host
+   - port  → atoi 转换为整数存入 config->port
+   - root  → strncpy 拷贝到 config->root
+   - log   → strncpy 拷贝到 config->log_path
+   均参照已实现的 server_name 分支模式。
+
+# 验证
+make clean && make    # 编译通过，零警告
+./build/mini_web_server config/server.conf   # 运行正常，所有配置项正确输出
+
+
+## 问题 2：Content-Length 硬编码，缺乏可维护性
+
+# 使用的命令
+./build/mini_web_server config/server.conf
+python3 -c 'print(len("Hello, Web!\n"))'   # 辅助验证
+
+# 问题描述
+src/http_response.c 中 Content-Length 硬编码为 12，与 body 字符串耦合。
+经实际验证，strlen("Hello, Web!\n") = 12（\n 已被计入），硬编码值本身碰巧正确。
+但若后续修改 body 内容，容易忘记同步更新 Content-Length，属于代码质量问题。
+
+# 解决方法
+将 "Content-Length: 12\r\n" 改为 "Content-Length: %d\r\n"，使用 strlen(body)
+动态计算长度，使 Content-Length 始终与 body 实际长度保持一致。
+
+# 验证
+make clean && make    # 编译通过
+./build/mini_web_server config/server.conf   # 输出 Content-Length: 12，与 body 长度一致
+strings build/mini_web_server | grep Content-Length   # 确认二进制中为 %d 格式化串
