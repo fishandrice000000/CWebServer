@@ -10,6 +10,11 @@ mini_web_server
 # Logs
 logs/*.log
 
+# Test artifacts
+bad_log_output.txt
+day01_output.txt
+config/bad_log.conf
+
 # IDE / Editor
 .vscode/
 .idea/
