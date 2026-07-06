@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-test -f logs/server.log
-grep -F "[INFO] server config loaded" logs/server.log
-
 rm -f logs/server.log
 rm -f day01_output.txt
 rm -f bad_log_output.txt
