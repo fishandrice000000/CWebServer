@@ -1,9 +1,11 @@
 #include "http_response.h"
 #include <stdio.h>
+#include <string.h>
 
 int build_hello_response(char *buffer, int size)
 {
     const char *body = "Hello, Web!\n";
+    int         body_len = (int)strlen(body);
     int         written;
 
     if (buffer == NULL || size < 0) {
@@ -15,9 +17,10 @@ int build_hello_response(char *buffer, int size)
         size,
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/html\r\n"
-        "Content-Length: 12\r\n"
+        "Content-Length: %d\r\n"
         "\r\n"
         "%s",
+        body_len,
         body
     );
 
