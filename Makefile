@@ -28,7 +28,7 @@ $(BUILDDIR)/log.o: $(SRCDIR)/log.c include/log.h
 $(BUILDDIR)/http_response.o: $(SRCDIR)/http_response.c include/http_response.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: run test clean
+.PHONY: run test clean test-clean
 
 run: $(BUILDDIR)/$(TARGET)
 	./$(BUILDDIR)/$(TARGET) config/server.conf
@@ -40,3 +40,7 @@ clean:
 	rm -rf $(BUILDDIR)
 	rm -f day01_output.txt bad_log_output.txt
 	rm -f logs/server.log
+
+test-clean:
+	rm -f day01_output.txt bad_log_output.txt
+	rm -f config/bad_log.conf
