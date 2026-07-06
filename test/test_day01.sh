@@ -19,7 +19,7 @@ CONFIG
 
 make clean
 make
-./mini_web_server config/server.conf > day01_output.txt
+./build/mini_web_server config/server.conf > day01_output.txt
 grep -F "server_name=MiniWeb" day01_output.txt
 grep -F "host=127.0.0.1" day01_output.txt
 grep -F "port=8080" day01_output.txt
@@ -29,7 +29,7 @@ grep -F "Content-Type: text/html" day01_output.txt
 grep -F "Hello, Web!" day01_output.txt
 
 set +e
-./mini_web_server config/bad_log.conf > bad_log_output.txt 2>&1
+./build/mini_web_server config/bad_log.conf > bad_log_output.txt 2>&1
 status=$?
 set -e
 test "$status" -ne 0
