@@ -5,6 +5,10 @@ build/
 *.so
 *.out
 *.exe
+mini_web_server
+
+# Logs
+logs/*.log
 
 # IDE / Editor
 .vscode/
