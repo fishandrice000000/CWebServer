@@ -6,3 +6,59 @@
 # # 报错内容
 # # 解决方法
 #
+
+## 问题 1：add/delete 操作未持久化到 CSV
+
+# 使用的命令
+./build/mini_web_server config/server.conf add testuser testpass 139
+./build/mini_web_server config/server.conf find testuser   # NOT_FOUND!
+
+# 原因
+每次命令是独立进程, add 仅修改内存链表, 进程退出后丢失.
+
+# 解决方法
+添加 user_store_save() 函数, 在 add/delete 后写回 CSV 文件.
+
+
+## 问题 2：strtok 跳过空字段导致 CSV 数据错位
+
+# 使用的命令
+./build/mini_web_server config/server.conf find no_pswd
+# 预期: password 为空, phone=13800000009
+# 实际: password=13800000009, phone 为空
+
+# 原因
+strtok 将连续逗号 (,,) 视为一个分隔符, 空字段被跳过, 后续字段左移错位.
+
+# 解决方法
+自定义 parse_csv_line(), 逐字符扫描逗号边界, 空字段正确处理为空字符串.
+
+
+## 问题 3：malloc 未检查返回值
+
+# 使用的命令
+grep -n 'malloc' src/user_store.c
+
+# 原因
+user_store_load 和 user_store_add 中 malloc 的返回值直接使用, 未检查 NULL.
+
+# 解决方法
+添加 if (s == NULL) 检查, 打印错误并返回 -1.
+
+
+## 问题 4：user_store_save 非原子写入
+
+# 使用的命令
+grep -A3 'fopen.*"w"' src/user_store.c
+
+# 原因
+直接以 "w" 模式打开原文件, 写入中途出错会导致 CSV 全部丢失.
+
+# 解决方法
+先写 <path>.tmp, 再 rename 原子替换原文件.
+
+
+# 验证
+make clean && make                    # 编译通过, 零警告
+bash test/test_day02.sh               # DAY02 PASS
+./build/mini_web_server config/server.conf list   # 空字段显示正常
