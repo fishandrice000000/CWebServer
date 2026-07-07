@@ -14,17 +14,22 @@ CWebServer/
 │   ├── main.c                    # 入口
 │   ├── config.c                  # 配置解析
 │   ├── log.c                     # 日志系统
-│   └── http_response.c           # HTTP 响应构建
+│   ├── http_response.c           # HTTP 响应构建
+│   └── user_store.c              # 用户存储
 ├── include/                      # 公共头文件
 │   ├── config.h
 │   ├── log.h
-│   └── http_response.h
+│   ├── http_response.h
+│   └── user_store.h
+├── data/                         # 数据文件
+│   └── users.csv
 ├── config/                       # 配置文件
 │   └── server.conf
 ├── www/                          # 静态资源目录
 │   └── index.html
 ├── test/                         # 测试脚本
-│   └── test_day01.sh
+│   ├── test_day01.sh
+│   └── test_day02.sh
 ├── build/                        # 构建产物（gitignore）
 ├── logs/                         # 运行日志（gitignore）
 ├── training/                     # 课堂训练（与主项目独立）
@@ -34,27 +39,27 @@ CWebServer/
 ├── docs/                         # 文档
 │   ├── course/                   # 课程 PDF 课件
 │   └── project/                  # 项目文档
-│       ├── debug-log.txt         # 调试记录
+│       ├── debug-logs/           # 调试记录
 │       └── what_we_have_done/    # 各课时完成总结
 ├── Makefile
 ├── .gitignore
 └── README.md
 ```
 
-### V0.1 模块关系
+### V0.2 模块关系
 
 ```text
 ┌──────────┐
-│  main.c  │  入口：加载配置 → 初始化日志 → 输出 HTTP 响应
-└──┬───┬───┘
-   │   │
-   ▼   ▼
-┌──────┐ ┌────────┐ ┌────────────────┐
-│config│ │  log   │ │ http_response  │
-│ .c   │ │  .c    │ │     .c         │
-└──────┘ └────────┘ └────────────────┘
- 解析      写日志     构建 HTTP 响应
-server.conf
+│  main.c  │  入口：配置加载 → 日志初始化 → 用户管理命令 / HTTP 响应
+└──┬───┬───┴───────┐
+   │   │           │
+   ▼   ▼           ▼
+┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐
+│config│ │ log  │ │user_store  │ │ http_response  │
+│ .c   │ │ .c   │ │    .c      │ │     .c         │
+└──────┘ └──────┘ └────────────┘ └────────────────┘
+ 解析配置  写日志   CSV 读写      HTTP 响应构建
+                  增删查
 ```
 
 后续课程将陆续加入：server、http_parser、thread_pool、io (epoll)、timer 等模块。
@@ -83,8 +88,11 @@ make
 # 运行
 make run
 
-# 测试
-make test
+# 测试（Day01）
+make test01
+
+# 测试（Day02）
+make test02
 
 # 清理
 make clean
@@ -95,5 +103,8 @@ make clean
 | 课时 | 内容 | 状态 |
 |------|------|------|
 | W1D1 | Linux 开发环境、GNU 工具链、V0.1 工程骨架、链表/fmt 训练 | ✅ 完成 |
+| W1D2 | 指针与链表、CSV 读写、V0.2 用户存储与查询 | ✅ 完成 |
 
-详见 [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
+详见：
+- [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
+- [`docs/project/what_we_have_done/W1D2.md`](docs/project/what_we_have_done/W1D2.md)
