@@ -37,7 +37,7 @@ $(BUILDDIR)/user_store.o: $(SRCDIR)/user_store.c include/user_store.h
 run: $(BUILDDIR)/$(TARGET)
 	./$(BUILDDIR)/$(TARGET) config/server.conf
 
-test:
+test01: $(BUILDDIR)/$(TARGET)
 	bash test/test_day01.sh
 
 test02: $(BUILDDIR)/$(TARGET)
