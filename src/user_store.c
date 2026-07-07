@@ -15,6 +15,56 @@ static void remove_newline(char *s)
     if (p) *p = '\0';
 }
 
+/*
+ * 从 CSV 行中按顺序提取字段, 处理空字段 (连续逗号).
+ * 将 line 中的前 max_fields 个字段拷贝到 fields 数组中.
+ * 返回实际提取的字段数.
+ */
+static int parse_csv_line(char *line, char fields[][64], int max_fields)
+{
+    int   field = 0;
+    char *start = line;
+    char *p     = line;
+
+    while (field < max_fields) {
+        /* 跳过前导空格 */
+        while (*start == ' ') start++;
+
+        if (*start == '\0') {
+            /* 行尾, 剩余字段置空 */
+            fields[field][0] = '\0';
+            field++;
+            continue;
+        }
+
+        /* 找到当前字段的结束位置: 逗号或行尾 */
+        p = start;
+        while (*p != ',' && *p != '\0') p++;
+
+        /* 复制字段 (去掉尾部空格) */
+        int len = p - start;
+        while (len > 0 && start[len - 1] == ' ') len--;
+        if (len >= 64) len = 63;
+        memcpy(fields[field], start, len);
+        fields[field][len] = '\0';
+
+        field++;
+
+        if (*p == ',') {
+            start = p + 1;
+        } else {
+            /* 行尾, 剩余字段置空 */
+            while (field < max_fields) {
+                fields[field][0] = '\0';
+                field++;
+            }
+            break;
+        }
+    }
+
+    return field;
+}
+
 /* ---- 接口实现 ---- */
 
 UserNode *user_store_init(void)
@@ -49,34 +99,32 @@ int user_store_load(UserNode *head, const char *path)
 
         if (strlen(line) == 0) continue;  /* 跳过空行 */
 
-        User u;
-        memset(&u, 0, sizeof(u));
-
-        char *token = strtok(line, ",");
-        int   field = 0;
-
-        while (token != NULL && field < 3) {
-            switch (field) {
-            case 0: strncpy(u.username, token, sizeof(u.username) - 1); break;
-            case 1: strncpy(u.password, token, sizeof(u.password) - 1); break;
-            case 2: strncpy(u.phone,    token, sizeof(u.phone)    - 1); break;
-            }
-            field++;
-            token = strtok(NULL, ",");
-        }
+        char fields[3][64];
+        parse_csv_line(line, fields, 3);
 
         /* 至少有 username 就认为有效 */
-        if (strlen(u.username) > 0) {
-            /* 尾插法 */
-            UserNode *s = (UserNode *)malloc(sizeof(UserNode));
-            s->data = u;
-            s->next = NULL;
+        if (strlen(fields[0]) == 0) continue;
 
-            UserNode *r = head;
-            while (r->next != NULL) r = r->next;
-            r->next = s;
-            count++;
+        User u;
+        memset(&u, 0, sizeof(u));
+        strncpy(u.username, fields[0], sizeof(u.username) - 1);
+        strncpy(u.password, fields[1], sizeof(u.password) - 1);
+        strncpy(u.phone,    fields[2], sizeof(u.phone)    - 1);
+
+        /* 尾插法 */
+        UserNode *s = (UserNode *)malloc(sizeof(UserNode));
+        if (s == NULL) {
+            fprintf(stderr, "user_store_load: malloc failed\n");
+            fclose(fp);
+            return -1;
         }
+        s->data = u;
+        s->next = NULL;
+
+        UserNode *r = head;
+        while (r->next != NULL) r = r->next;
+        r->next = s;
+        count++;
     }
 
     fclose(fp);
@@ -131,6 +179,10 @@ int user_store_add(UserNode *head, User u)
 
     /* 尾插 */
     UserNode *s = (UserNode *)malloc(sizeof(UserNode));
+    if (s == NULL) {
+        fprintf(stderr, "user_store_add: malloc failed\n");
+        return -1;
+    }
     s->data = u;
     s->next = NULL;
 
@@ -160,11 +212,15 @@ int user_store_delete(UserNode *head, const char *name)
 
 int user_store_save(UserNode *head, const char *path)
 {
-    FILE *fp = fopen(path, "w");
+    char tmp_path[256];
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+
+    FILE *fp = fopen(tmp_path, "w");
     if (fp == NULL) {
-        fprintf(stderr, "failed to write %s\n", path);
+        fprintf(stderr, "failed to write %s\n", tmp_path);
         return -1;
     }
+
     fprintf(fp, "username,password,phone\n");
     UserNode *p = head->next;
     while (p != NULL) {
@@ -173,6 +229,12 @@ int user_store_save(UserNode *head, const char *path)
         p = p->next;
     }
     fclose(fp);
+
+    /* 原子替换 */
+    if (rename(tmp_path, path) != 0) {
+        fprintf(stderr, "failed to rename %s → %s\n", tmp_path, path);
+        return -1;
+    }
     return 0;
 }
 
