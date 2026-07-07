@@ -32,7 +32,7 @@ $(BUILDDIR)/http_response.o: $(SRCDIR)/http_response.c include/http_response.h
 $(BUILDDIR)/user_store.o: $(SRCDIR)/user_store.c include/user_store.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: run test test02 clean test-clean
+.PHONY: run test01 test02 clean test-clean
 
 run: $(BUILDDIR)/$(TARGET)
 	./$(BUILDDIR)/$(TARGET) config/server.conf
