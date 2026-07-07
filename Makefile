@@ -1,4 +1,4 @@
-# CWebServer V0.1 Makefile
+# CWebServer V0.2 Makefile
 
 CC      = gcc
 CFLAGS  = -g -Wall -Iinclude
@@ -9,14 +9,15 @@ BUILDDIR = build
 OBJS    = $(BUILDDIR)/main.o \
           $(BUILDDIR)/config.o \
           $(BUILDDIR)/log.o \
-          $(BUILDDIR)/http_response.o
+          $(BUILDDIR)/http_response.o \
+          $(BUILDDIR)/user_store.o
 
 $(shell mkdir -p $(BUILDDIR))
 
 $(BUILDDIR)/$(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@
 
-$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h
+$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/config.o: $(SRCDIR)/config.c include/config.h
@@ -28,13 +29,19 @@ $(BUILDDIR)/log.o: $(SRCDIR)/log.c include/log.h
 $(BUILDDIR)/http_response.o: $(SRCDIR)/http_response.c include/http_response.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: run test clean test-clean
+$(BUILDDIR)/user_store.o: $(SRCDIR)/user_store.c include/user_store.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: run test test02 clean test-clean
 
 run: $(BUILDDIR)/$(TARGET)
 	./$(BUILDDIR)/$(TARGET) config/server.conf
 
 test:
 	bash test/test_day01.sh
+
+test02: $(BUILDDIR)/$(TARGET)
+	bash test/test_day02.sh
 
 clean:
 	rm -rf $(BUILDDIR)
