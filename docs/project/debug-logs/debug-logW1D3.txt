@@ -1,0 +1,26 @@
+# Debug Log - W1D3 V0.3
+# 记录编译、运行、调试过程中出现的问题
+#
+# 格式：
+# # 使用的命令
+# # 报错内容
+# # 解决方法
+#
+
+## 问题 1：main.c 缺少 #include <stdlib.h> 导致 free 警告
+
+# 使用的命令
+make
+
+# 报错内容
+src/main.c:69:13: warning: implicit declaration of function 'free'
+
+# 原因
+V0.3 新增了 free(idx) 调用释放 user_index_t, 但 main.c 未包含 <stdlib.h>.
+
+# 解决方法
+在 main.c 中添加 #include <stdlib.h>.
+
+# 验证
+make clean && make    # 零警告, 编译通过
+bash test/test_day03.sh   # DAY03 PASS
