@@ -15,27 +15,37 @@ CWebServer/
 │   ├── config.c                  # 配置解析
 │   ├── log.c                     # 日志系统
 │   ├── http_response.c           # HTTP 响应构建
-│   └── user_store.c              # 用户存储
+│   ├── user_store.c              # 用户存储
+│   └── user_index.c              # BST 索引
 ├── include/                      # 公共头文件
 │   ├── config.h
 │   ├── log.h
 │   ├── http_response.h
-│   └── user_store.h
+│   ├── user_store.h
+│   └── user_index.h
 ├── data/                         # 数据文件
-│   └── users.csv
+│   ├── users.csv
+│   └── users_large.csv
 ├── config/                       # 配置文件
 │   └── server.conf
 ├── www/                          # 静态资源目录
 │   └── index.html
 ├── test/                         # 测试脚本
 │   ├── test_day01.sh
-│   └── test_day02.sh
+│   ├── test_day02.sh
+│   └── test_day03.sh
 ├── build/                        # 构建产物（gitignore）
 ├── logs/                         # 运行日志（gitignore）
 ├── training/                     # 课堂训练（与主项目独立）
-│   └── w1d1/
-│       ├── linked_list/          # 训练一：单向链表
-│       └── fmt/                  # 训练二：文本格式化
+│   ├── w1d1/
+│   │   ├── linked_list/          # 单向链表
+│   │   └── fmt/                  # 文本格式化
+│   ├── w1d2/
+│   │   ├── train1/               # CSV + 链表 CRUD
+│   │   └── train2/               # 有序链表
+│   └── w1d3/
+│       ├── train1/               # BST 查找与新增
+│       └── train2/               # BST 删除与修改
 ├── docs/                         # 文档
 │   ├── course/                   # 课程 PDF 课件
 │   └── project/                  # 项目文档
@@ -46,20 +56,20 @@ CWebServer/
 └── README.md
 ```
 
-### V0.2 模块关系
+### V0.3 模块关系
 
 ```text
 ┌──────────┐
-│  main.c  │  入口：配置加载 → 日志初始化 → 用户管理命令 / HTTP 响应
-└──┬───┬───┴───────┐
-   │   │           │
-   ▼   ▼           ▼
-┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐
-│config│ │ log  │ │user_store  │ │ http_response  │
-│ .c   │ │ .c   │ │    .c      │ │     .c         │
-└──────┘ └──────┘ └────────────┘ └────────────────┘
- 解析配置  写日志   CSV 读写      HTTP 响应构建
-                  增删查
+│  main.c  │  入口：配置加载 → 日志初始化 → 用户管理 / HTTP 响应
+└──┬───┬───┴───┬───┐
+   │   │       │   │
+   ▼   ▼       ▼   ▼
+┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐ ┌────────────┐
+│config│ │ log  │ │user_store  │ │ http_response  │ │user_index  │
+│ .c   │ │ .c   │ │    .c      │ │     .c         │ │    .c      │
+└──────┘ └──────┘ └────────────┘ └────────────────┘ └────────────┘
+ 解析配置  写日志   CSV 链表存储    HTTP 响应构建    BST 索引 (指针)
+                  增删查                          查找/compare
 ```
 
 后续课程将陆续加入：server、http_parser、thread_pool、io (epoll)、timer 等模块。
@@ -94,6 +104,9 @@ make test01
 # 测试（Day02）
 make test02
 
+# 测试（Day03）
+make test03
+
 # 清理
 make clean
 ```
@@ -104,7 +117,9 @@ make clean
 |------|------|------|
 | W1D1 | Linux 开发环境、GNU 工具链、V0.1 工程骨架、链表/fmt 训练 | ✅ 完成 |
 | W1D2 | 指针与链表、CSV 读写、V0.2 用户存储与查询 | ✅ 完成 |
+| W1D3 | 数组与结构、BST、V0.3 用户索引与查找对比 | ✅ 完成 |
 
 详见：
 - [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
 - [`docs/project/what_we_have_done/W1D2.md`](docs/project/what_we_have_done/W1D2.md)
+- [`docs/project/what_we_have_done/W1D3.md`](docs/project/what_we_have_done/W1D3.md)
