@@ -2,10 +2,13 @@
 #include "http_response.h"
 #include "log.h"
 #include "user_store.h"
+#include "user_index.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#define USERS_CSV "data/users.csv"
+#define USERS_CSV       "data/users.csv"
+#define USERS_LARGE_CSV "data/users_large.csv"
 
 int main(int argc, char *argv[])
 {
@@ -58,8 +61,38 @@ int main(int argc, char *argv[])
             user_store_delete(users, argv[3]);
             user_store_save(users, USERS_CSV);
 
+        /* ---- V0.3: BST 索引子命令 ---- */
+        } else if (strcmp(cmd, "index") == 0) {
+            user_index_t *idx = user_index_init();
+            user_index_build(idx, users);
+            user_index_print(idx->root);
+            user_index_destroy(idx->root);
+            free(idx);
+
+        } else if (strcmp(cmd, "find-index") == 0 && argc >= 4) {
+            user_index_t *idx = user_index_init();
+            user_index_build(idx, users);
+            user_index_node_t *found = user_index_find(idx->root, argv[3]);
+            if (found) {
+                printf("FOUND\n");
+                printf("%-16s %-24s %-16s\n", "USERNAME", "PASSWORD", "PHONE");
+                printf("%-16s %-24s %-16s\n",
+                       found->user->username, found->user->password, found->user->phone);
+            } else {
+                printf("NOT_FOUND\n");
+            }
+            user_index_destroy(idx->root);
+            free(idx);
+
+        } else if (strcmp(cmd, "compare") == 0 && argc >= 4) {
+            user_index_t *idx = user_index_init();
+            user_index_build(idx, users);
+            user_index_compare(users, idx->root, argv[3]);
+            user_index_destroy(idx->root);
+            free(idx);
+
         } else {
-            printf("usage: %s conf/server.conf {list|find|add|delete} [args...]\n", argv[0]);
+            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare} [args...]\n", argv[0]);
         }
 
         user_store_destroy(users);
