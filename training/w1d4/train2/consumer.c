@@ -65,9 +65,6 @@ int main(int argc, char *argv[])
 
     fclose(fp);
     shm_detach(pool);
-
-    /* 最后一个消费者清理 IPC */
-    shm_del(shm_id);
-    sem_del(sem_id);
+    /* IPC 对象由 make clean 清理, 进程不销毁 */
     return 0;
 }

@@ -8,16 +8,23 @@
 
 int sem_create(int key, int nsems, int init_val)
 {
-    int sem_id = semget((key_t)key, nsems, IPC_CREAT | 0666);
-    if (sem_id == -1) {
-        perror("semget");
-        exit(1);
-    }
-    union semun sem_union;
-    sem_union.val = init_val;
-    if (semctl(sem_id, 0, SETVAL, sem_union) == -1) {
-        perror("semctl SETVAL");
-        exit(1);
+    int sem_id;
+
+    /* 尝试以 IPC_EXCL 创建, 失败说明已存在 */
+    sem_id = semget((key_t)key, nsems, IPC_CREAT | IPC_EXCL | 0666);
+    if (sem_id >= 0) {
+        /* 我们是创建者, 设置初始值 */
+        union semun sem_union;
+        sem_union.val = init_val;
+        semctl(sem_id, 0, SETVAL, sem_union);
+        printf("[init] created semaphore (id=%d)\n", sem_id);
+    } else {
+        /* 已存在, 直接获取 */
+        sem_id = semget((key_t)key, nsems, 0666);
+        if (sem_id == -1) {
+            perror("semget");
+            exit(1);
+        }
     }
     return sem_id;
 }
@@ -59,10 +66,19 @@ void sem_del(int sem_id)
 
 int shm_create(int key, size_t size)
 {
-    int shm_id = shmget((key_t)key, size, IPC_CREAT | 0666);
-    if (shm_id == -1) {
-        perror("shmget");
-        exit(1);
+    int shm_id;
+
+    /* 尝试以 IPC_EXCL 创建, 失败说明已存在 */
+    shm_id = shmget((key_t)key, size, IPC_CREAT | IPC_EXCL | 0666);
+    if (shm_id >= 0) {
+        printf("[init] created shared memory (id=%d)\n", shm_id);
+    } else {
+        /* 已存在, 直接获取 */
+        shm_id = shmget((key_t)key, size, 0666);
+        if (shm_id == -1) {
+            perror("shmget");
+            exit(1);
+        }
     }
     return shm_id;
 }
