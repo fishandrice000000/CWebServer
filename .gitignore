@@ -10,6 +10,9 @@ mini_web_server
 # Logs
 logs/*.log
 
+# Request outputs
+outputs/*.out
+
 # Test artifacts
 bad_log_output.txt
 day01_output.txt
