@@ -1,0 +1,4 @@
+Greetings from producer2
+Producer2 second line
+Another message from producer2
+END
