@@ -1,0 +1,76 @@
+# Debug Log - W1D4 V0.4
+# 记录编译、运行、调试过程中出现的问题
+#
+# 格式：
+# # 使用的命令
+# # 报错内容
+# # 解决方法
+#
+
+## 问题 1：fork 前 stdout 缓冲区未刷新导致输出重复
+
+# 使用的命令
+./build/mini_web_server config/server.conf process 2>&1 | grep "server_name" | wc -l
+# 输出: 4 (预期 1)
+
+# 原因
+管道触发 stdout 全缓冲模式. print_config 输出残留在缓冲区中未 flush.
+fork 将缓冲区完整复制给每个子进程, 子进程退出时各自 flush 同一份数据.
+
+# 解决方法
+fork 前调用 fflush(NULL) 刷新所有 stdio 流.
+
+# 验证
+./build/mini_web_server config/server.conf process 2>&1 | grep "server_name" | wc -l
+# 输出: 1
+
+
+## 问题 2：snprintf 缓冲区过小导致编译警告
+
+# 使用的命令
+make 2>&1 | grep truncated
+
+# 原因
+process_server.c 中 child_msg[128] / out_path[256] / req_files[][256]
+不足以容纳长路径 + 格式前缀, 编译器发出 format-truncation 警告.
+
+# 解决方法
+PATH_SZ / MSG_SZ 提升至 1024, %s 改用 %.512s 限制源字符串长度.
+
+# 验证
+make 2>&1 | grep -c warning   # 输出: 0
+
+
+## 问题 3：每个子进程独立加载 CSV 导致重复 I/O
+
+# 使用的命令
+./build/mini_web_server config/server.conf process 2>&1 | grep "Loaded.*users" | wc -l
+# 输出: 5
+
+# 原因
+request_handler.c 中处理 /users/<name> 时每个子进程都调用 user_store_load,
+3 个 req 文件 + 1 个父进程 + 缓冲复制 = 5 次加载输出.
+
+# 解决方法
+父进程加载一次 users.csv, 通过 process_requests → handle_request 参数
+传递给子进程. 子进程直接查链表, 不再读文件.
+
+# 验证
+./build/mini_web_server config/server.conf process 2>&1 | grep "Loaded.*users" | wc -l
+# 输出: 1
+bash test/test_day04.sh   # DAY04 PASS
+
+
+## 问题 4：snprintf format-truncation 警告反复出现
+
+# 使用的命令
+make
+
+# 原因
+即使 PATH_SZ=1024, 编译器仍警告 snprintf 可能截断 (因为 %s 理论可达 1023 字节).
+
+# 解决方法
+%.256s 和 %.512s 限制源字符串最大长度, 保证加前缀后不会超出目标缓冲区.
+
+# 验证
+make 2>&1 | grep -c warning   # 输出: 0
