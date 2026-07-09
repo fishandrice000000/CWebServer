@@ -1,4 +1,4 @@
-# CWebServer V0.3 Makefile
+# CWebServer V0.4 Makefile
 
 CC      = gcc
 CFLAGS  = -g -Wall -Iinclude
@@ -11,14 +11,16 @@ OBJS    = $(BUILDDIR)/main.o \
           $(BUILDDIR)/log.o \
           $(BUILDDIR)/http_response.o \
           $(BUILDDIR)/user_store.o \
-          $(BUILDDIR)/user_index.o
+          $(BUILDDIR)/user_index.o \
+          $(BUILDDIR)/request_handler.o \
+          $(BUILDDIR)/process_server.o
 
 $(shell mkdir -p $(BUILDDIR))
 
 $(BUILDDIR)/$(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@
 
-$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h
+$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h include/process_server.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/config.o: $(SRCDIR)/config.c include/config.h
@@ -36,7 +38,13 @@ $(BUILDDIR)/user_store.o: $(SRCDIR)/user_store.c include/user_store.h
 $(BUILDDIR)/user_index.o: $(SRCDIR)/user_index.c include/user_index.h include/user_store.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: run test01 test02 test03 clean test-clean
+$(BUILDDIR)/request_handler.o: $(SRCDIR)/request_handler.c include/request_handler.h include/user_store.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/process_server.o: $(SRCDIR)/process_server.c include/process_server.h include/request_handler.h include/log.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: run test01 test02 test03 test04 clean test-clean
 
 run: $(BUILDDIR)/$(TARGET)
 	./$(BUILDDIR)/$(TARGET) config/server.conf
@@ -50,10 +58,14 @@ test02: $(BUILDDIR)/$(TARGET)
 test03: $(BUILDDIR)/$(TARGET)
 	bash test/test_day03.sh
 
+test04: $(BUILDDIR)/$(TARGET)
+	bash test/test_day04.sh
+
 clean:
 	rm -rf $(BUILDDIR)
 	rm -f day01_output.txt bad_log_output.txt
 	rm -f logs/server.log
+	rm -f outputs/*.out
 
 test-clean:
 	rm -f day01_output.txt bad_log_output.txt
