@@ -3,6 +3,7 @@
 #include "log.h"
 #include "user_store.h"
 #include "user_index.h"
+#include "process_server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -91,8 +92,14 @@ int main(int argc, char *argv[])
             user_index_destroy(idx->root);
             free(idx);
 
+        /* ---- V0.4: 多进程请求处理 ---- */
+        } else if (strcmp(cmd, "process") == 0) {
+            log_info("process_server: starting");
+            process_requests("requests", "outputs", users);
+            log_info("process_server: finished");
+
         } else {
-            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare} [args...]\n", argv[0]);
+            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process} [args...]\n", argv[0]);
         }
 
         user_store_destroy(users);
