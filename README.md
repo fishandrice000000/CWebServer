@@ -16,13 +16,17 @@ CWebServer/
 │   ├── log.c                     # 日志系统
 │   ├── http_response.c           # HTTP 响应构建
 │   ├── user_store.c              # 用户存储
-│   └── user_index.c              # BST 索引
+│   ├── user_index.c              # BST 索引
+│   ├── request_handler.c         # 请求处理
+│   └── process_server.c          # 多进程服务
 ├── include/                      # 公共头文件
 │   ├── config.h
 │   ├── log.h
 │   ├── http_response.h
 │   ├── user_store.h
-│   └── user_index.h
+│   ├── user_index.h
+│   ├── request_handler.h
+│   └── process_server.h
 ├── data/                         # 数据文件
 │   ├── users.csv
 │   └── users_large.csv
@@ -33,7 +37,10 @@ CWebServer/
 ├── test/                         # 测试脚本
 │   ├── test_day01.sh
 │   ├── test_day02.sh
-│   └── test_day03.sh
+│   ├── test_day03.sh
+│   └── test_day04.sh
+├── requests/                     # 请求文件 (.req)
+├── outputs/                      # 输出文件 (gitignore)
 ├── build/                        # 构建产物（gitignore）
 ├── logs/                         # 运行日志（gitignore）
 ├── training/                     # 课堂训练（与主项目独立）
@@ -46,6 +53,9 @@ CWebServer/
 │   └── w1d3/
 │       ├── train1/               # BST 查找与新增
 │       └── train2/               # BST 删除与修改
+│   └── w1d4/
+│       ├── train1/               # 简单 Shell
+│       └── train2/               # 生产者-消费者
 ├── docs/                         # 文档
 │   ├── course/                   # 课程 PDF 课件
 │   └── project/                  # 项目文档
@@ -56,20 +66,20 @@ CWebServer/
 └── README.md
 ```
 
-### V0.3 模块关系
+### V0.4 模块关系
 
 ```text
 ┌──────────┐
-│  main.c  │  入口：配置加载 → 日志初始化 → 用户管理 / HTTP 响应
-└──┬───┬───┴───┬───┐
-   │   │       │   │
-   ▼   ▼       ▼   ▼
-┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐ ┌────────────┐
-│config│ │ log  │ │user_store  │ │ http_response  │ │user_index  │
-│ .c   │ │ .c   │ │    .c      │ │     .c         │ │    .c      │
-└──────┘ └──────┘ └────────────┘ └────────────────┘ └────────────┘
- 解析配置  写日志   CSV 链表存储    HTTP 响应构建    BST 索引 (指针)
-                  增删查                          查找/compare
+│  main.c  │  入口：配置加载 → 日志初始化 → 用户管理 / HTTP 响应 / 多进程处理
+└──┬───┬───┴───┬───┬───┐
+   │   │       │   │   │
+   ▼   ▼       ▼   ▼   ▼
+┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐ ┌────────────┐ ┌──────────────────┐
+│config│ │ log  │ │user_store  │ │ http_response  │ │user_index  │ │process_server    │
+│ .c   │ │ .c   │ │    .c      │ │     .c         │ │    .c      │ │ +request_handler │
+└──────┘ └──────┘ └────────────┘ └────────────────┘ └────────────┘ └──────────────────┘
+ 解析配置  写日志   CSV 链表存储    HTTP 响应构建    BST 索引 (指针)   多进程请求分发
+                  增删查                          查找/compare       fork/exec/waitpid
 ```
 
 后续课程将陆续加入：server、http_parser、thread_pool、io (epoll)、timer 等模块。
@@ -107,6 +117,9 @@ make test02
 # 测试（Day03）
 make test03
 
+# 测试（Day04）
+make test04
+
 # 清理
 make clean
 ```
@@ -118,8 +131,10 @@ make clean
 | W1D1 | Linux 开发环境、GNU 工具链、V0.1 工程骨架、链表/fmt 训练 | ✅ 完成 |
 | W1D2 | 指针与链表、CSV 读写、V0.2 用户存储与查询 | ✅ 完成 |
 | W1D3 | 数组与结构、BST、V0.3 用户索引与查找对比 | ✅ 完成 |
+| W1D4 | 多进程并发、XSI IPC、V0.4 多进程请求处理 | ✅ 完成 |
 
 详见：
 - [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
 - [`docs/project/what_we_have_done/W1D2.md`](docs/project/what_we_have_done/W1D2.md)
 - [`docs/project/what_we_have_done/W1D3.md`](docs/project/what_we_have_done/W1D3.md)
+- [`docs/project/what_we_have_done/W1D4.md`](docs/project/what_we_have_done/W1D4.md)
