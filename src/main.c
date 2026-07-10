@@ -4,6 +4,7 @@
 #include "user_store.h"
 #include "user_index.h"
 #include "process_server.h"
+#include "thread_server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -97,6 +98,14 @@ int main(int argc, char *argv[])
             log_info("process_server: starting");
             process_requests("requests", "outputs", users);
             log_info("process_server: finished");
+
+        /* ---- V0.5: 多线程请求处理 ---- */
+        } else if (strcmp(cmd, "threaded") == 0) {
+            int num_workers = (argc >= 4) ? atoi(argv[3]) : 3;
+            if (num_workers < 1) num_workers = 1;
+            log_info("thread_server: starting");
+            thread_server_run("requests", "outputs", users, num_workers);
+            log_info("thread_server: finished");
 
         } else {
             printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process} [args...]\n", argv[0]);
