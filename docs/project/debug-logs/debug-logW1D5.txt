@@ -1,0 +1,58 @@
+# Debug Log - W1D5 V0.5
+# 记录编译、运行、调试过程中出现的问题
+#
+# 格式：
+# # 使用的命令
+# # 报错内容
+# # 解决方法
+#
+
+## 问题 1：opendir 失败时未清理 mutex/cond
+
+# 使用的命令
+# 代码审计确认
+
+# 原因
+thread_server_run 中 mutex/cond init 在 opendir 之前.
+opendir 失败时直接 return -1, 未 destroy 已初始化的 mutex/cond.
+
+# 解决方法
+将 pthread_mutex_init / pthread_cond_init 移到 opendir 成功后执行.
+
+# 验证
+make clean && make    # 编译通过
+
+
+## 问题 2：malloc 未检查 NULL
+
+# 使用的命令
+grep -n 'malloc' src/thread_server.c
+
+# 原因
+workers 数组和 warg 的 malloc 返回值直接使用, 未检查 NULL.
+
+# 解决方法
+添加 NULL 检查, 失败时清理已分配资源 (mutex/cond/workers) 后返回 -1.
+
+# 验证
+make test05    # DAY05 PASS
+
+
+## 问题 3：linter 将 queue 定义移到头文件导致编译错误
+
+# 使用的命令
+make
+
+# 报错内容
+include/thread_server.h: unknown type name 'pthread_mutex_t'
+
+# 原因
+Linter 自动重构将 static request_queue_t queue 从 .c 移至 .h,
+但头文件未包含 <pthread.h>, 且 static 变量在头文件会导致多重定义.
+
+# 解决方法
+将所有实现细节 (queue, MAX_TASKS, PATH_SZ, worker_arg_t)
+保留在 .c 中, 头文件仅暴露 thread_server_run 接口.
+
+# 验证
+make clean && make    # 零警告
