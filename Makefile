@@ -1,7 +1,8 @@
-# CWebServer V0.4 Makefile
+# CWebServer V0.5 Makefile
 
 CC      = gcc
 CFLAGS  = -g -Wall -Iinclude
+LDFLAGS = -lpthread
 TARGET  = mini_web_server
 SRCDIR  = src
 BUILDDIR = build
@@ -13,14 +14,15 @@ OBJS    = $(BUILDDIR)/main.o \
           $(BUILDDIR)/user_store.o \
           $(BUILDDIR)/user_index.o \
           $(BUILDDIR)/request_handler.o \
-          $(BUILDDIR)/process_server.o
+          $(BUILDDIR)/process_server.o \
+          $(BUILDDIR)/thread_server.o
 
 $(shell mkdir -p $(BUILDDIR))
 
 $(BUILDDIR)/$(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $@
+	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
-$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h include/process_server.h
+$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h include/process_server.h include/thread_server.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/config.o: $(SRCDIR)/config.c include/config.h
@@ -44,7 +46,10 @@ $(BUILDDIR)/request_handler.o: $(SRCDIR)/request_handler.c include/request_handl
 $(BUILDDIR)/process_server.o: $(SRCDIR)/process_server.c include/process_server.h include/request_handler.h include/log.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: run test01 test02 test03 test04 clean test-clean
+$(BUILDDIR)/thread_server.o: $(SRCDIR)/thread_server.c include/thread_server.h include/request_handler.h include/log.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: run test01 test02 test03 test04 test05 clean test-clean
 
 run: $(BUILDDIR)/$(TARGET)
 	./$(BUILDDIR)/$(TARGET) config/server.conf
@@ -60,6 +65,9 @@ test03: $(BUILDDIR)/$(TARGET)
 
 test04: $(BUILDDIR)/$(TARGET)
 	bash test/test_day04.sh
+
+test05: $(BUILDDIR)/$(TARGET)
+	bash test/test_day05.sh
 
 clean:
 	rm -rf $(BUILDDIR)
