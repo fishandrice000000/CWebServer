@@ -96,6 +96,9 @@ void *philosopher(void *arg)
 
         printf("Philosopher %d picked up chopstick %d.\n", id, first);
 
+        /* lock 模式: 短暂延迟, 让其他哲学家也有机会拿到第一只筷子 */
+        if (!use_trylock) sleep(1);
+
         /* 拿第二只筷子 */
         take_chopstick(id, second);
 
