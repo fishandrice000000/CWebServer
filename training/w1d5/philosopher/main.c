@@ -63,9 +63,18 @@ void *philosopher(void *arg)
     int left  = id;
     int right = (id + 1) % philosopher_count;
 
-    /* 避免死锁: 偶数哲学家先拿左, 奇数先拿右 (trylock 模式下也减少竞争) */
-    int first = (id % 2 == 0) ? left  : right;
-    int second = (id % 2 == 0) ? right : left;
+    /*
+     * lock 模式: 所有人先左后右 (经典死锁场景)
+     * trylock 模式: 偶数先左后右, 奇数先右后左 (预防死锁)
+     */
+    int first, second;
+    if (use_trylock) {
+        first  = (id % 2 == 0) ? left  : right;
+        second = (id % 2 == 0) ? right : left;
+    } else {
+        first  = left;
+        second = right;
+    }
 
     while (running) {
         printf("Philosopher %d is thinking.\n", id);
