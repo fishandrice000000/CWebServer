@@ -1,0 +1,68 @@
+# Debug Log - W2D2 V0.7
+# 记录编译、运行、调试过程中出现的问题
+#
+# 格式：
+# # 使用的命令
+# # 报错内容
+# # 解决方法
+#
+
+## 问题 1：sig_chld 信号处理函数中调用了非异步安全函数
+
+# 使用的命令
+# 静态代码审查
+man 7 signal-safety | grep -E "printf|snprintf|fprintf"
+
+# 原因
+sig_chld 信号处理函数中调用了 printf、snprintf 和 log_info(内部调用 fprintf)。
+POSIX 规定信号处理函数中只能调用异步信号安全函数, printf/fprintf 不在其中。
+信号可能在主线程执行 printf 期间到达, 此时 stdout 内部锁已被持有,
+信号处理函数中的 printf 再次尝试获取同一把锁 → 死锁。
+
+虽然触发概率低 (主线程大部分时间阻塞在 accept), 但违反 POSIX 规范。
+
+# 解决方法
+1. sig_chld 改为只设 volatile sig_atomic_t 标志位 (异步安全)
+2. waitpid + printf + log_info 移到主循环末尾和循环后两处执行
+3. EINTR 不再使用 continue, 改为 if/else 自然落到循环末尾的 SIGCHLD 检查
+
+
+## 问题 2：测试脚本 not-found 检查存在假通过
+
+# 使用的命令
+bash test/test_day07.sh
+
+# 原因
+测试脚本以 max_clients=5 启动服务器, 5 个并发请求发出后服务器停止 accept。
+但后面还有一次独立 curl 对 /not-found 做状态码检查:
+  check "/not-found 404" "404 Not Found"  "$(curl ... || echo '404')"
+curl 连接失败时 || echo '404' 兜底, grep 匹配到 "404" → 假 PASS。
+此外对 404 响应体做 grep "404 Not Found" 也不正确 (404 的 Content-Length 为 0)。
+
+# 解决方法
+1. 将 /not-found 的 curl 合并到 5 个并发请求批次中
+2. 改用 -o /dev/null -w '%{http_code}' 获取状态码
+3. check 改为匹配 "404" 而非 "404 Not Found"
+4. 删除 || echo '404' 假兜底
+
+
+## 问题 3：SIGCHLD 回收信息在 max_clients break 后丢失
+
+# 使用的命令
+./build/mini_web_server config/server.conf serve-fork 1
+# 另一个终端: curl http://127.0.0.1:8080/hello
+
+# 原因
+sig_chld 重构为标志位后, 回收逻辑放在 accept 循环顶部。
+但 max_clients 达到后 break 退出循环, 此时子进程可能还未 exit,
+SIGCHLD 到达时循环已退出, got_sigchld 标志无人检查。
+这导致 "[server] child X terminated" 消息不打印。
+
+# 解决方法
+将 SIGCHLD 回收逻辑改为两处:
+1. accept 循环末尾 (正常 accept / EINTR / fork 失败都会经过)
+2. 循环结束后 (处理 break 退出时可能漏掉的子进程)
+
+# 验证
+make clean && make                    # 零警告
+bash test/test_day07.sh               # DAY07 PASS
