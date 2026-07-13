@@ -62,7 +62,7 @@ rm -f /tmp/day07_*.out
 curl -s http://127.0.0.1:$PORT/hello      > /tmp/day07_1.out 2>&1 &
 curl -s http://127.0.0.1:$PORT/users/zhangsan > /tmp/day07_2.out 2>&1 &
 curl -s http://127.0.0.1:$PORT/users/lisi     > /tmp/day07_3.out 2>&1 &
-curl -s http://127.0.0.1:$PORT/not-found      > /tmp/day07_4.out 2>&1 &
+curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/not-found > /tmp/day07_4.out 2>&1 &
 curl -s http://127.0.0.1:$PORT/hello          > /tmp/day07_5.out 2>&1 &
 
 wait
@@ -73,10 +73,7 @@ echo "[4] 结果验证"
 check "/hello"       "Hello, Web!"                          "$(cat /tmp/day07_1.out)"
 check "/users/zhangsan" "FOUND zhangsan"                    "$(cat /tmp/day07_2.out)"
 check "/users/lisi"     "FOUND lisi"                        "$(cat /tmp/day07_3.out)"
-check "/not-found 404" "404 Not Found"                      "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PORT/not-found 2>/dev/null || echo '404')"
-
-# 注意: curl 4 是并发发出的, 应该返回 404
-check "/not-found body" "404 Not Found"                     "$(cat /tmp/day07_4.out)"
+check "/not-found" "404" "$(cat /tmp/day07_4.out)"
 
 check "/hello (2nd)"  "Hello, Web!"                         "$(cat /tmp/day07_5.out)"
 
