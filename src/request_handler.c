@@ -102,26 +102,35 @@ static int read_line(int fd, char *buf, int max)
 int handle_http_request(int conn_fd, UserNode *users)
 {
     char line[MAX_LINE];
+    char body[256];
 
     /* 只读 HTTP 请求的第一行 */
     if (read_line(conn_fd, line, sizeof(line)) < 0) {
-        dprintf(conn_fd, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        dprintf(conn_fd,
+            "HTTP/1.1 400 Bad Request\r\n"
+            "Content-Length: 0\r\n"
+            "\r\n");
         return -1;
     }
 
     char method[8], path[128];
     if (sscanf(line, "%7s %127s", method, path) != 2) {
-        dprintf(conn_fd, "HTTP/1.1 400 Bad Request\r\n\r\n");
+        dprintf(conn_fd,
+            "HTTP/1.1 400 Bad Request\r\n"
+            "Content-Length: 0\r\n"
+            "\r\n");
         return -1;
     }
 
     if (strcmp(path, "/hello") == 0) {
+        const char *hello_body = "Hello, Web!\n";
+        int hello_len = (int)strlen(hello_body);
         dprintf(conn_fd,
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: text/html\r\n"
-            "Content-Length: 12\r\n"
+            "Content-Length: %d\r\n"
             "\r\n"
-            "Hello, Web!\n");
+            "%s", hello_len, hello_body);
 
     } else if (strncmp(path, "/users/", 7) == 0) {
         const char *name = path + 7;
@@ -129,23 +138,29 @@ int handle_http_request(int conn_fd, UserNode *users)
         int found = 0;
         while (p != NULL) {
             if (strcmp(p->data.username, name) == 0) {
+                int body_len = snprintf(body, sizeof(body),
+                    "FOUND %s %s %s\n",
+                    p->data.username, p->data.password, p->data.phone);
                 dprintf(conn_fd,
                     "HTTP/1.1 200 OK\r\n"
                     "Content-Type: text/plain\r\n"
+                    "Content-Length: %d\r\n"
                     "\r\n"
-                    "FOUND %s %s %s\n",
-                    p->data.username, p->data.password, p->data.phone);
+                    "%s", body_len, body);
                 found = 1;
                 break;
             }
             p = p->next;
         }
         if (!found) {
+            int body_len = snprintf(body, sizeof(body),
+                "NOT_FOUND %s\n", name);
             dprintf(conn_fd,
                 "HTTP/1.1 200 OK\r\n"
                 "Content-Type: text/plain\r\n"
+                "Content-Length: %d\r\n"
                 "\r\n"
-                "NOT_FOUND %s\n", name);
+                "%s", body_len, body);
         }
 
     } else {
