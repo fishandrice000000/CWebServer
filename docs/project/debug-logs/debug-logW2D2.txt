@@ -66,3 +66,22 @@ SIGCHLD 到达时循环已退出, got_sigchld 标志无人检查。
 # 验证
 make clean && make                    # 零警告
 bash test/test_day07.sh               # DAY07 PASS
+
+
+## 问题 4：SIGPIPE 测试误判为服务器崩溃
+
+# 使用的命令
+bash test/test_day07.sh
+
+# 原因
+测试脚本第 7 项 SIGPIPE 测试使用 max_clients=1 启动服务器。
+/dev/tcp 连接消耗掉唯一的客户端名额后, 服务器因 max_clients 达标而正常退出。
+后续 kill -0 找不到进程, 误报为 "服务器已崩溃 (可能是 SIGPIPE)"。
+实际并非 SIGPIPE 导致, 而是服务器正常结束。
+
+# 解决方法
+将 max_clients 从 1 改为 2, 确保 /dev/tcp 连接不会触发服务器退出,
+从而真正验证 SIGPIPE 信号被忽略后服务器仍正常运行。
+
+# 验证
+make test07    # 8 PASS, 0 FAIL
