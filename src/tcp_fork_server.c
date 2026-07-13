@@ -21,19 +21,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
-/* ---- SIGCHLD 处理: 循环 waitpid 回收所有已终止子进程 ---- */
+/* ---- SIGCHLD 处理: 只设标志位, 真正回收在主循环中做 ---- */
+static volatile sig_atomic_t got_sigchld;
+
 static void sig_chld(int signo)
 {
-    pid_t pid;
-    int   stat;
-
-    while ((pid = waitpid(-1, &stat, WNOHANG)) > 0)
-    {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "tcp_fork_server: child %d terminated", pid);
-        log_info(msg);
-        printf("[server] child %d terminated\n", pid);
-    }
+    got_sigchld = 1;
 }
 
 int tcp_fork_server_run(const char *host, int port, UserNode *users,
@@ -46,7 +39,11 @@ int tcp_fork_server_run(const char *host, int port, UserNode *users,
 
     /* 1. socket */
     listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_fd < 0) { perror("socket"); return -1; }
+    if (listen_fd < 0)
+    {
+        perror("socket");
+        return -1;
+    }
 
     /* 允许端口快速重用 */
     int opt = 1;
@@ -55,7 +52,7 @@ int tcp_fork_server_run(const char *host, int port, UserNode *users,
     /* 2. bind */
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port   = htons(port);
+    server_addr.sin_port = htons(port);
     if (strcmp(host, "0.0.0.0") == 0 || strlen(host) == 0)
         server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     else if (inet_pton(AF_INET, host, &server_addr.sin_addr) <= 0)
@@ -111,50 +108,98 @@ int tcp_fork_server_run(const char *host, int port, UserNode *users,
         if (conn_fd < 0)
         {
             /* accept 可能被 SIGCHLD 打断 */
-            if (errno == EINTR)
-                continue;
-            perror("accept");
-            break;
+            if (errno != EINTR)
+            {
+                perror("accept");
+                break;
+            }
+            /* EINTR: 落到循环末尾检查 SIGCHLD */
         }
-
-        client_count++;
-
+        else
         {
-            char msg[96];
-            snprintf(msg, sizeof(msg),
-                     "tcp_fork_server: client #%d from %s:%d",
-                     client_count,
-                     inet_ntoa(client_addr.sin_addr),
-                     ntohs(client_addr.sin_port));
-            log_info(msg);
+            client_count++;
+
+            {
+                char msg[96];
+                snprintf(msg, sizeof(msg),
+                         "tcp_fork_server: client #%d from %s:%d",
+                         client_count,
+                         inet_ntoa(client_addr.sin_addr),
+                         ntohs(client_addr.sin_port));
+                log_info(msg);
+            }
+
+            pid_t pid = fork();
+            if (pid < 0)
+            {
+                perror("fork");
+                close(conn_fd);
+                /* 落到循环末尾检查 SIGCHLD */
+            }
+            else if (pid == 0)
+            {
+                /* ===== 子进程 ===== */
+                close(listen_fd);
+
+                handle_http_request(conn_fd, users);
+
+                close(conn_fd);
+                exit(0);
+            }
+            else
+            {
+                /* ===== 父进程 ===== */
+                close(conn_fd);
+            }
         }
 
-        pid_t pid = fork();
-        if (pid < 0)
+        /* ---- SIGCHLD 回收 (循环末尾) ---- */
+        if (got_sigchld)
         {
-            perror("fork");
-            close(conn_fd);
-            continue;
+            got_sigchld = 0;
+            pid_t pid;
+            int stat;
+            while ((pid = waitpid(-1, &stat, WNOHANG)) > 0)
+            {
+                char msg[64];
+                snprintf(msg, sizeof(msg),
+                         "tcp_fork_server: child %d terminated", pid);
+                log_info(msg);
+                printf("[server] child %d terminated\n", pid);
+            }
         }
-
-        if (pid == 0)
-        {
-            /* ===== 子进程 ===== */
-            close(listen_fd);               /* 子进程不需要监听 socket */
-
-            handle_http_request(conn_fd, users);
-
-            close(conn_fd);
-            exit(0);
-        }
-
-        /* ===== 父进程 ===== */
-        close(conn_fd);                     /* 父进程不需要已连接 socket */
     }
 
-    /* 等待所有子进程结束 (可选: 避免服务器先于子进程退出) */
-    while (waitpid(-1, NULL, 0) > 0)
-        ;
+    /* ---- 循环后的回收: 处理 break 退出时可能漏掉的子进程 ---- */
+    if (got_sigchld)
+    {
+        got_sigchld = 0;
+        pid_t pid;
+        int stat;
+        while ((pid = waitpid(-1, &stat, WNOHANG)) > 0)
+        {
+            char msg[64];
+            snprintf(msg, sizeof(msg),
+                     "tcp_fork_server: child %d terminated", pid);
+            log_info(msg);
+            printf("[server] child %d terminated\n", pid);
+        }
+    }
+
+    /* 等待所有剩余子进程结束 */
+    {
+        pid_t pid;
+        int stat;
+        while ((pid = waitpid(-1, &stat, 0)) > 0)
+        {
+            char msg[64];
+            snprintf(msg, sizeof(msg),
+                     "tcp_fork_server: child %d terminated", pid);
+            log_info(msg);
+            printf("[server] child %d terminated\n", pid);
+        }
+    }
+
     /* 恢复默认信号处理 */
     signal(SIGCHLD, SIG_DFL);
     signal(SIGPIPE, SIG_DFL);
