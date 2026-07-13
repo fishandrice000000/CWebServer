@@ -1,0 +1,85 @@
+# Debug Log - W2D1 V0.6
+# 记录编译、运行、调试过程中出现的问题
+#
+# 格式：
+# # 使用的命令
+# # 报错内容
+# # 解决方法
+#
+
+## 问题 1：404 响应缺少 Content-Length 导致 curl 报错
+
+# 使用的命令
+curl -v http://127.0.0.1:8080/not-exist
+
+# 报错内容
+* no chunk, no close, no size. Assume close to signal end
+* Recv failure: 连接被对方重置
+curl: (56) Recv failure: 连接被对方重置
+
+# 原因
+handle_http_request 中 404 响应只写了 "HTTP/1.1 404 Not Found\r\n\r\n",
+没有 Content-Length 头. HTTP/1.1 客户端无法判断响应何时结束,
+服务器 close 连接时 TCP 层发送 RST, curl 报错.
+
+# 解决方法
+补上 "Content-Length: 0\r\n".
+
+
+## 问题 2：400 Bad Request 响应同样缺少 Content-Length
+
+# 使用的命令
+printf "INVALID\r\n" | nc 127.0.0.1 8080
+
+# 原因
+read_line 失败和 sscanf 解析失败的 400 响应都没有 Content-Length 头.
+
+# 解决方法
+两处 400 响应均补上 "Content-Length: 0\r\n".
+
+
+## 问题 3：FOUND/NOT_FOUND 响应缺少 Content-Length
+
+# 使用的命令
+curl -v http://127.0.0.1:8080/users/zhangsan 2>&1 | grep -i content-length
+# 输出: (空, 没有 Content-Length 头)
+
+# 原因
+FOUND/NOT_FOUND 正文内容动态生成, 长度可变,
+但响应中没有 Content-Length 告知客户端预期大小.
+
+# 解决方法
+正文先用 snprintf 计算长度, 再 dprintf 输出带 Content-Length: %d 的完整响应.
+
+
+## 问题 4：/hello 的 Content-Length 硬编码 12
+
+# 使用的命令
+grep "Content-Length: 12" src/request_handler.c
+
+# 原因
+handle_http_request 中新写的 /hello 路由直接写了 Content-Length: 12,
+没有使用 strlen 动态计算, 与 V0.1 已修复的模式不一致.
+
+# 解决方法
+改用 strlen(hello_body) 动态计算.
+
+
+## 问题 5：测试脚本连续启动服务器时端口冲突
+
+# 使用的命令
+bash test/test_day06.sh
+
+# 原因
+服务器每次只处理一个连接就退出, 测试脚本连续启停服务器时,
+前一次 bind 的端口还在 TIME_WAIT 状态, 导致下次 bind 失败.
+
+# 解决方法
+1. tcp_server.c 中添加 setsockopt(SO_REUSEADDR) 允许端口快速重用
+2. 测试脚本每个测试独立启停服务器, wait 后 sleep 0.5 缓冲
+
+
+# 验证
+make clean && make                    # 零警告
+bash test/test_day06.sh               # DAY06 PASS
+curl -v http://127.0.0.1:8080/users/zhangsan | grep Content-Length  # 有
