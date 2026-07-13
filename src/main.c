@@ -6,6 +6,7 @@
 #include "process_server.h"
 #include "thread_server.h"
 #include "tcp_server.h"
+#include "tcp_fork_server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -108,11 +109,20 @@ int main(int argc, char *argv[])
             thread_server_run("requests", "outputs", users, num_workers);
             log_info("thread_server: finished");
 
-        /* ---- V0.6: TCP 网络服务 ---- */
+        /* ---- V0.6: TCP 网络服务 (单连接) ---- */
         } else if (strcmp(cmd, "serve") == 0) {
             log_info("tcp_server: starting");
             tcp_server_run(config.host, config.port, users);
             log_info("tcp_server: finished");
+
+        /* ---- V0.7: 多进程 TCP 网络服务 ---- */
+        } else if (strcmp(cmd, "serve-fork") == 0) {
+            int max_clients = (argc >= 4) ? atoi(argv[3]) : 0;
+            if (max_clients < 0) max_clients = 0;
+            log_info("tcp_fork_server: starting");
+            tcp_fork_server_run(config.host, config.port, users,
+                                max_clients);
+            log_info("tcp_fork_server: finished");
 
         } else {
             printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process} [args...]\n", argv[0]);
