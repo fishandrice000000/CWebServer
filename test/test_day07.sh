@@ -99,7 +99,7 @@ fi
 echo ""
 echo "[7] SIGPIPE: 客户端立刻断开"
 # 启动服务器, 处理 1 个客户端后退出
-$SERVER $CONF serve-fork 1 &
+$SERVER $CONF serve-fork 2 &
 SPID=$!
 sleep 1
 
