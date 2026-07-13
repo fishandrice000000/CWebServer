@@ -12,4 +12,12 @@
  */
 int handle_request(const char *req_path, const char *out_path, UserNode *users);
 
+/*
+ * 从 TCP 连接读取 HTTP 请求, 解析第一行 ("GET /path HTTP/1.1"),
+ * 路由到对应处理函数, 将响应写回 conn_fd.
+ * 支持: /hello → 200, /users/<name> → FOUND/NOT_FOUND, 其他 → 404.
+ * 成功返回 0.
+ */
+int handle_http_request(int conn_fd, UserNode *users);
+
 #endif
