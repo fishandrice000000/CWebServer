@@ -1,0 +1,34 @@
+# Debug Log - W2D3 V0.8
+# 记录编译、运行、调试过程中出现的问题
+#
+# 格式：
+# # 使用的命令
+# # 报错内容
+# # 解决方法
+#
+
+## 问题 1：错误恢复路径中条件变量销毁不完整
+
+# 使用的命令
+# 静态代码审查
+
+# 原因
+thread_pool_init 中有四处错误恢复路径 (malloc workers 失败、malloc ctx 失败、
+pthread_create 失败、pthread_cond_init 部分失败), 每处都可能只销毁了 not_empty
+而漏掉 not_full, 或只广播了 not_empty 而漏掉 not_full.
+
+具体:
+1. pthread_cond_init: 用 || 串联两个 init, 若 not_empty 成功但 not_full 失败,
+   只销毁了 mutex, 漏掉已初始化的 not_empty.
+2. malloc workers 失败: 只销毁 not_empty, 漏 not_full.
+3. for 循环中: malloc ctx 失败和 pthread_create 失败两条路径,
+   只销毁 not_empty 和广播 not_empty, 漏 not_full.
+
+# 解决方法
+1. pthread_cond_init 拆为两次独立判断, not_full 失败时先销毁 not_empty.
+2. 各处错误路径补上 pthread_cond_destroy(&not_full).
+3. 广播补上 pthread_cond_broadcast(&not_full), 与 shutdown 路径对称.
+
+# 验证
+make clean && make                    # 零警告
+bash test/test_day08.sh               # 7 PASS, 0 FAIL
