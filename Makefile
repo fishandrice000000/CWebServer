@@ -1,4 +1,4 @@
-# CWebServer V0.7 Makefile
+# CWebServer V0.8 Makefile
 
 CC      = gcc
 CFLAGS  = -g -Wall -Iinclude
@@ -17,14 +17,16 @@ OBJS    = $(BUILDDIR)/main.o \
           $(BUILDDIR)/process_server.o \
           $(BUILDDIR)/thread_server.o \
           $(BUILDDIR)/tcp_server.o \
-          $(BUILDDIR)/tcp_fork_server.o
+          $(BUILDDIR)/tcp_fork_server.o \
+          $(BUILDDIR)/thread_pool.o \
+          $(BUILDDIR)/tcp_pool_server.o
 
 $(shell mkdir -p $(BUILDDIR))
 
 $(BUILDDIR)/$(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
-$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h include/process_server.h include/thread_server.h include/tcp_server.h include/tcp_fork_server.h
+$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h include/process_server.h include/thread_server.h include/tcp_server.h include/tcp_fork_server.h include/tcp_pool_server.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/config.o: $(SRCDIR)/config.c include/config.h
@@ -57,7 +59,13 @@ $(BUILDDIR)/tcp_server.o: $(SRCDIR)/tcp_server.c include/tcp_server.h include/re
 $(BUILDDIR)/tcp_fork_server.o: $(SRCDIR)/tcp_fork_server.c include/tcp_fork_server.h include/request_handler.h include/log.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-.PHONY: run test01 test02 test03 test04 test05 test06 test07 clean test-clean
+$(BUILDDIR)/thread_pool.o: $(SRCDIR)/thread_pool.c include/thread_pool.h include/request_handler.h include/log.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/tcp_pool_server.o: $(SRCDIR)/tcp_pool_server.c include/tcp_pool_server.h include/thread_pool.h include/request_handler.h include/log.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+.PHONY: run test01 test02 test03 test04 test05 test06 test07 test08 clean test-clean
 
 run: $(BUILDDIR)/$(TARGET)
 	./$(BUILDDIR)/$(TARGET) config/server.conf
@@ -82,6 +90,9 @@ test06: $(BUILDDIR)/$(TARGET)
 
 test07: $(BUILDDIR)/$(TARGET)
 	bash test/test_day07.sh
+
+test08: $(BUILDDIR)/$(TARGET)
+	bash test/test_day08.sh
 
 clean:
 	rm -rf $(BUILDDIR)
