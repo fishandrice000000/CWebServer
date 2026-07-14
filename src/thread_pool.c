@@ -95,10 +95,16 @@ int thread_pool_init(thread_pool_t *pool, int num_workers, UserNode *users)
         perror("pthread_mutex_init");
         return -1;
     }
-    if (pthread_cond_init(&pool->queue.not_empty, NULL) != 0 ||
-        pthread_cond_init(&pool->queue.not_full, NULL) != 0)
+    if (pthread_cond_init(&pool->queue.not_empty, NULL) != 0)
     {
         perror("pthread_cond_init");
+        pthread_mutex_destroy(&pool->queue.mutex);
+        return -1;
+    }
+    if (pthread_cond_init(&pool->queue.not_full, NULL) != 0)
+    {
+        perror("pthread_cond_init");
+        pthread_cond_destroy(&pool->queue.not_empty);
         pthread_mutex_destroy(&pool->queue.mutex);
         return -1;
     }
@@ -107,6 +113,7 @@ int thread_pool_init(thread_pool_t *pool, int num_workers, UserNode *users)
     if (pool->workers == NULL)
     {
         perror("malloc");
+        pthread_cond_destroy(&pool->queue.not_full);
         pthread_cond_destroy(&pool->queue.not_empty);
         pthread_mutex_destroy(&pool->queue.mutex);
         return -1;
@@ -121,9 +128,11 @@ int thread_pool_init(thread_pool_t *pool, int num_workers, UserNode *users)
             /* 清理已创建的线程和资源 */
             pool->queue.shutdown = 1;
             pthread_cond_broadcast(&pool->queue.not_empty);
+            pthread_cond_broadcast(&pool->queue.not_full);
             for (int j = 0; j < i; j++)
                 pthread_join(pool->workers[j], NULL);
             free(pool->workers);
+            pthread_cond_destroy(&pool->queue.not_full);
             pthread_cond_destroy(&pool->queue.not_empty);
             pthread_mutex_destroy(&pool->queue.mutex);
             return -1;
@@ -137,9 +146,11 @@ int thread_pool_init(thread_pool_t *pool, int num_workers, UserNode *users)
             free(ctx);
             pool->queue.shutdown = 1;
             pthread_cond_broadcast(&pool->queue.not_empty);
+            pthread_cond_broadcast(&pool->queue.not_full);
             for (int j = 0; j < i; j++)
                 pthread_join(pool->workers[j], NULL);
             free(pool->workers);
+            pthread_cond_destroy(&pool->queue.not_full);
             pthread_cond_destroy(&pool->queue.not_empty);
             pthread_mutex_destroy(&pool->queue.mutex);
             return -1;
