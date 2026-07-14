@@ -21,7 +21,9 @@ CWebServer/
 │   ├── process_server.c          # 多进程服务
 │   ├── thread_server.c           # 多线程服务
 │   ├── tcp_server.c              # TCP 网络服务
-│   └── tcp_fork_server.c         # 多进程 TCP 网络服务
+│   ├── tcp_fork_server.c         # 多进程 TCP 网络服务
+│   ├── thread_pool.c             # 线程池
+│   └── tcp_pool_server.c         # 线程池 TCP 网络服务
 ├── include/                      # 公共头文件
 │   ├── config.h
 │   ├── log.h
@@ -32,7 +34,9 @@ CWebServer/
 │   ├── process_server.h
 │   ├── thread_server.h
 │   ├── tcp_server.h
-│   └── tcp_fork_server.h
+│   ├── tcp_fork_server.h
+│   ├── thread_pool.h
+│   └── tcp_pool_server.h
 ├── data/                         # 数据文件
 │   ├── users.csv
 │   └── users_large.csv
@@ -78,23 +82,30 @@ CWebServer/
 └── README.md
 ```
 
-### V0.7 模块关系
+### V0.8 模块关系
 
 ```text
 ┌──────────┐
 │  main.c  │  入口：配置加载 → 日志初始化 → 用户管理 / 多进程 / 多线程 / TCP 服务
-└──┬───┬───┴───┬───┬───┬───┬───┬───┐
-   │   │       │   │   │   │   │   │
-   ▼   ▼       ▼   ▼   ▼   ▼   ▼   ▼
-┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐ ┌────────────┐ ┌──────────────────┐ ┌──────────────────┐ ┌────────────┐ ┌────────────────┐
-│config│ │ log  │ │user_store  │ │ http_response  │ │user_index  │ │process_server    │ │thread_server     │ │tcp_server  │ │tcp_fork_server │
-│ .c   │ │ .c   │ │    .c      │ │     .c         │ │    .c      │ │ +request_handler │ │ +request_handler │ │+req_handler│ │ +req_handler   │
-└──────┘ └──────┘ └────────────┘ └────────────────┘ └────────────┘ └──────────────────┘ └──────────────────┘ └────────────┘ └────────────────┘
- 解析配置  写日志   CSV 链表存储    HTTP 响应构建    BST 索引 (指针)   多进程请求分发      多线程请求分发      TCP socket 服务   多进程 TCP 服务
-                  增删查                          查找/compare       fork/exec/waitpid   mutex+cond+队列     bind/listen/accept fork+SIGCHLD+EINTR
+└──┬───┬───┴───┬───┬───┬───┬───┬───┬───┬───┐
+   │   │       │   │   │   │   │   │   │   │
+   ▼   ▼       ▼   ▼   ▼   ▼   ▼   ▼   ▼   ▼
+┌──────┐ ┌──────┐ ┌────────────┐ ┌────────────────┐ ┌────────────┐
+│config│ │ log  │ │user_store  │ │ http_response  │ │user_index  │
+│ .c   │ │ .c   │ │    .c      │ │     .c         │ │    .c      │
+└──────┘ └──────┘ └────────────┘ └────────────────┘ └────────────┘
+ 解析配置  写日志   CSV 链表存储    HTTP 响应构建    BST 索引 (指针)
+                  增删查                          查找/compare
+
+┌──────────────────┐ ┌──────────────────┐ ┌────────────┐ ┌────────────────┐ ┌───────────────┐ ┌────────────────┐
+│process_server    │ │thread_server     │ │tcp_server  │ │tcp_fork_server │ │ thread_pool   │ │tcp_pool_server │
+│ +request_handler │ │ +request_handler │ │+req_handler│ │ +req_handler   │ │               │ │ +req_handler   │
+└──────────────────┘ └──────────────────┘ └────────────┘ └────────────────┘ └───────────────┘ └────────────────┘
+ 多进程请求分发      多线程请求分发      TCP socket服务   多进程TCP服务      线程池 (mutex      线程池 TCP 服务
+ fork/exec/waitpid   mutex+cond+队列     bind/listen     fork+SIGCHLD       +cond+循环队列)    accept→push→worker
 ```
 
-后续课程将陆续加入：server、http_parser、thread_pool、io (epoll)、timer 等模块。
+后续课程将陆续加入：http_parser、io (epoll)、timer 等模块。
 
 ## 03 技术栈
 
@@ -141,6 +152,9 @@ make test06
 # 测试（Day07）
 make test07
 
+# 测试（Day08）
+make test08
+
 # 清理
 make clean
 ```
@@ -156,6 +170,7 @@ make clean
 | W1D5 | 多线程并发、互斥量/条件变量、V0.5 多线程请求处理 | ✅ 完成 |
 | W2D1 | 网络编程基础、TCP 协议、Socket API、V0.6 TCP 网络服务 | ✅ 完成 |
 | W2D2 | 多客户端连接、连接生命周期、V0.7 多进程 TCP 网络服务 | ✅ 完成 |
+| W2D3 | 线程池、并发控制、V0.8 线程池 TCP 网络服务 | ✅ 完成 |
 
 详见：
 - [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
@@ -165,3 +180,4 @@ make clean
 - [`docs/project/what_we_have_done/W1D5.md`](docs/project/what_we_have_done/W1D5.md)
 - [`docs/project/what_we_have_done/W2D1.md`](docs/project/what_we_have_done/W2D1.md)
 - [`docs/project/what_we_have_done/W2D2.md`](docs/project/what_we_have_done/W2D2.md)
+- [`docs/project/what_we_have_done/W2D3.md`](docs/project/what_we_have_done/W2D3.md)
