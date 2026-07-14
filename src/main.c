@@ -7,6 +7,7 @@
 #include "thread_server.h"
 #include "tcp_server.h"
 #include "tcp_fork_server.h"
+#include "tcp_pool_server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -124,8 +125,19 @@ int main(int argc, char *argv[])
                                 max_clients);
             log_info("tcp_fork_server: finished");
 
+        /* ---- V0.8: 线程池 TCP 网络服务 ---- */
+        } else if (strcmp(cmd, "serve-pool") == 0) {
+            int num_workers = (argc >= 4) ? atoi(argv[3]) : 3;
+            int max_clients = (argc >= 5) ? atoi(argv[4]) : 0;
+            if (num_workers < 1)  num_workers  = 1;
+            if (max_clients < 0)  max_clients  = 0;
+            log_info("tcp_pool_server: starting");
+            tcp_pool_server_run(config.host, config.port, users,
+                                num_workers, max_clients);
+            log_info("tcp_pool_server: finished");
+
         } else {
-            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process} [args...]\n", argv[0]);
+            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process|serve|serve-fork|serve-pool} [args...]\n", argv[0]);
         }
 
         user_store_destroy(users);
