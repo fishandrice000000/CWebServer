@@ -1,0 +1,15 @@
+# Debug Log - W2D5 V1.0
+# 记录编译、运行、调试过程中出现的问题
+
+## 本次迭代未发现需要修复的 BUG
+
+# 代码经审查, 以下几点已覆盖:
+# - epoll_create / epoll_ctl ADD 失败时正确回滚资源 (close epfd + listen_fd)
+# - epoll_wait 被信号打断时检查 EINTR 并 continue
+# - SIGPIPE 已忽略
+# - 客户端 fd 处理完毕后正确 epoll_ctl DEL + close
+# - max_requests 计数在循环顶部检查, 不会中途截断
+
+# 验证
+make clean && make                    # 零警告
+bash test/test_day10.sh               # DAY10: 7 PASS, 0 FAIL
