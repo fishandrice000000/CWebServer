@@ -8,6 +8,7 @@
 #include "tcp_server.h"
 #include "tcp_fork_server.h"
 #include "tcp_pool_server.h"
+#include "epoll_server.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -136,8 +137,17 @@ int main(int argc, char *argv[])
                                 num_workers, max_clients);
             log_info("tcp_pool_server: finished");
 
+        /* ---- V1.0: epoll HTTP 服务器 ---- */
+        } else if (strcmp(cmd, "serve-epoll") == 0) {
+            int max_requests = (argc >= 4) ? atoi(argv[3]) : 0;
+            if (max_requests < 0) max_requests = 0;
+            log_info("epoll_server: starting");
+            epoll_server_run(config.host, config.port, users,
+                             max_requests);
+            log_info("epoll_server: finished");
+
         } else {
-            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process|serve|serve-fork|serve-pool} [args...]\n", argv[0]);
+            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process|serve|serve-fork|serve-pool|serve-epoll} [args...]\n", argv[0]);
         }
 
         user_store_destroy(users);
