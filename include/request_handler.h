@@ -34,11 +34,12 @@ int http_parse_request(const char *data, int len, http_request_t *req);
 /*
  * 处理已解析的 HTTP 请求, 构造响应写入 conn_fd.
  * 返回响应的字节数 (用于访问日志), 失败返回 -1.
+ * status_code: 输出参数, 实际返回的 HTTP 状态码.
  * 路由: GET /, GET /hello, GET /users/<name>, POST /echo,
  *       GET /missing → 404, 其他 → 404, 非 GET/POST → 405.
  */
 int http_handle_request(int conn_fd, const http_request_t *req,
-                        UserNode *users);
+                        UserNode *users, int *status_code);
 
 /*
  * 从请求头中提取指定字段的值.

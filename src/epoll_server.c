@@ -61,19 +61,12 @@ static void process_http_request(int idx, int epfd, UserNode *users)
         log_info(log_msg);
     }
 
-    int resp_bytes = http_handle_request(c->fd, &req, users);
+    int sc = 200;
+    int resp_bytes = http_handle_request(c->fd, &req, users, &sc);
 
     /* 访问日志 */
     {
         const char *ua = http_get_header(&req, "User-Agent");
-        int sc = 200;
-
-        /* 推断实际状态码 */
-        if (resp_bytes < 0) sc = 500;
-        else if (strncmp(req.path, "/missing", 8) == 0) sc = 404;
-        else if (strcmp(req.method, "GET") != 0 &&
-                 strcmp(req.method, "POST") != 0) sc = 405;
-
         access_log_write(c->ip, req.method, req.path, req.version,
                          sc, resp_bytes > 0 ? resp_bytes : 0,
                          ua ? ua : "-");

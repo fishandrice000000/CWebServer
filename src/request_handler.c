@@ -261,7 +261,7 @@ int http_parse_request(const char *data, int len, http_request_t *req)
 }
 
 int http_handle_request(int conn_fd, const http_request_t *req,
-                        UserNode *users)
+                        UserNode *users, int *status_code)
 {
     char body[4096];
     int  body_len   = 0;
@@ -355,14 +355,15 @@ int http_handle_request(int conn_fd, const http_request_t *req,
         "Connection: close\r\n"
         "\r\n",
         status, status_text, content_type, body_len);
-    if (total < 0) return -1;
+    if (total < 0) { if (status_code) *status_code = status; return -1; }
 
     if (body_len > 0)
     {
         ssize_t sent = send(conn_fd, body, body_len, 0);
-        if (sent < 0) return -1;
+        if (sent < 0) { if (status_code) *status_code = status; return -1; }
         total += (int)sent;
     }
 
+    if (status_code) *status_code = status;
     return total;
 }
