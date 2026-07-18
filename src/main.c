@@ -137,14 +137,21 @@ int main(int argc, char *argv[])
                                 num_workers, max_clients);
             log_info("tcp_pool_server: finished");
 
-        /* ---- V1.0: epoll HTTP 服务器 ---- */
-        } else if (strcmp(cmd, "serve-epoll") == 0) {
+        /* ---- V1.0/W3D1: epoll HTTP 服务器 ---- */
+        } else if (strcmp(cmd, "serve-epoll") == 0 ||
+                   strcmp(cmd, "serve-http") == 0) {
             int max_requests = (argc >= 4) ? atoi(argv[3]) : 0;
             if (max_requests < 0) max_requests = 0;
+
+            /* 初始化访问日志 */
+            access_log_init("logs/access.log");
+
             log_info("epoll_server: starting");
             epoll_server_run(config.host, config.port, users,
                              max_requests);
             log_info("epoll_server: finished");
+
+            access_log_close();
 
         } else {
             printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process|serve|serve-fork|serve-pool|serve-epoll} [args...]\n", argv[0]);
