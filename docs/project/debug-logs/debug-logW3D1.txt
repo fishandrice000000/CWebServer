@@ -1,0 +1,45 @@
+# Debug Log - W3D1 HTTP 协议概述
+# 记录编译、运行、调试过程中出现的问题
+
+## 问题 1：http_parse_request 请求行长度检查引用错误
+
+# 使用的命令
+curl -s http://127.0.0.1:8080/some-long-path
+
+# 报错内容
+访问日志中 HTTP 版本字段被截断:
+  GET / HTTP/1.1       → 正常
+  POST /echo HTTP      → "HTTP" (截断, 应为 "HTTP/1.1")
+  GET /missing HT      → "HT" (截断, 应为 "HTTP/1.1")
+
+# 原因
+http_parse_request 中对请求行长度的安全检查错误引用了
+sizeof(req->method) (16字节) 而非 sizeof(first_line) (1024字节).
+导致长度超过 15 字符的请求行被截断, HTTP 版本字段丢失尾部字符.
+
+# 解决方法
+将 first_line 数组声明移到长度检查之前, 并将 sizeof 引用改为
+sizeof(first_line) (1024字节).
+
+
+## 问题 2：访问日志状态码推断不准确
+
+# 使用的命令
+curl -s -o /dev/null http://127.0.0.1:8080/xyz && cat logs/access.log
+
+# 报错内容
+访问日志中 GET /xyz 的状态码显示为 200, 实际服务器返回的是 404.
+原因: http_handle_request 只返回响应字节数, 不返回状态码.
+process_http_request 通过路径和方法间接推断状态码,
+但无法区分"200 的 /" 和 "404 的 /xyz".
+
+# 解决方法
+http_handle_request 新增 status_code 输出参数,
+在处理过程中将实际状态码写入该参数.
+process_http_request 直接使用返回的状态码, 不再自行推断.
+
+
+# 验证
+make                # 零警告
+# 测试 GET /xyz → 访问日志显示 404
+# 测试 POST /echo → 访问日志显示 200
