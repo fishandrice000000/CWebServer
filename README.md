@@ -107,7 +107,7 @@ CWebServer/
  fork/exec/waitpid   mutex+cond+队列     bind/listen     fork+SIGCHLD       +cond+循环队列)    accept→push→worker epoll LT 模式
 ```
 
-后续课程将陆续加入：http_parser、io (epoll)、timer 等模块。
+后续课程将陆续加入：静态资源、CGI、定时器 等模块。
 
 ## 03 技术栈
 
@@ -178,6 +178,7 @@ make clean
 | W2D3 | 线程池、并发控制、V0.8 线程池 TCP 网络服务 | ✅ 完成 |
 | W2D4 | I/O 多路复用、select、TCP 多客户端文本通信 | ✅ 完成 |
 | W2D5 | epoll、高并发模型、V1.0 epoll HTTP 服务器 | ✅ 完成 |
+| W3D1 | HTTP 协议解析、请求/响应、日志系统 | ✅ 完成 |
 
 详见：
 - [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
@@ -190,3 +191,4 @@ make clean
 - [`docs/project/what_we_have_done/W2D3.md`](docs/project/what_we_have_done/W2D3.md)
 - [`docs/project/what_we_have_done/W2D4.md`](docs/project/what_we_have_done/W2D4.md)
 - [`docs/project/what_we_have_done/W2D5.md`](docs/project/what_we_have_done/W2D5.md)
+- [`docs/project/what_we_have_done/W3D1.md`](docs/project/what_we_have_done/W3D1.md)
