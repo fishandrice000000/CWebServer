@@ -1,7 +1,9 @@
 #include "request_handler.h"
 #include "user_store.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/socket.h>
 
@@ -171,4 +173,196 @@ int handle_http_request(int conn_fd, UserNode *users)
     }
 
     return 0;
+}
+
+/* ================================================================
+ * W3D1: 完整 HTTP 请求解析与处理
+ * ================================================================ */
+
+const char *http_get_header(const http_request_t *req, const char *name)
+{
+    static char value[512];
+    const char *p = req->headers;
+    int name_len = strlen(name);
+
+    while (*p)
+    {
+        if (strncasecmp(p, name, name_len) == 0 && p[name_len] == ':')
+        {
+            p += name_len + 1;
+            while (*p == ' ' || *p == '\t') p++;
+
+            /* 拷贝值到静态缓冲区, 在 \r\n 处截断 */
+            const char *end = strstr(p, "\r\n");
+            int vlen = end ? (int)(end - p) : (int)strlen(p);
+            if (vlen >= (int)sizeof(value)) vlen = (int)sizeof(value) - 1;
+            memcpy(value, p, vlen);
+            value[vlen] = '\0';
+            return value;
+        }
+        const char *nl = strstr(p, "\r\n");
+        if (nl == NULL) break;
+        p = nl + 2;
+    }
+    return NULL;
+}
+
+int http_parse_request(const char *data, int len, http_request_t *req)
+{
+    if (data == NULL || len <= 0) return -1;
+
+    memset(req, 0, sizeof(*req));
+
+    const char *header_end = strstr(data, "\r\n\r\n");
+    if (header_end == NULL) return -1;
+
+    const char *line_start = data;
+    const char *line_end   = strstr(line_start, "\r\n");
+    if (line_end == NULL) return -1;
+
+    char first_line[1024];
+    int first_line_len = line_end - line_start;
+    if (first_line_len >= (int)sizeof(first_line))
+        first_line_len = (int)sizeof(first_line) - 1;
+    memcpy(first_line, line_start, first_line_len);
+    first_line[first_line_len] = '\0';
+
+    if (sscanf(first_line, "%15s %255s %15s",
+               req->method, req->path, req->version) < 2)
+        return -1;
+
+    int hdr_start = line_end - data + 2;
+    int hdr_len   = header_end - data - hdr_start;
+    if (hdr_len > 0)
+    {
+        if (hdr_len >= HTTP_MAX_HEADERS) hdr_len = HTTP_MAX_HEADERS - 1;
+        memcpy(req->headers, data + hdr_start, hdr_len);
+        req->headers[hdr_len] = '\0';
+    }
+
+    const char *cl = http_get_header(req, "Content-Length");
+    int body_len = 0;
+    if (cl) body_len = atoi(cl);
+
+    if (body_len > 0)
+    {
+        const char *body_start = header_end + 4;
+        int remaining = len - (body_start - data);
+        if (remaining >= body_len)
+        {
+            if (body_len >= HTTP_MAX_BODY) body_len = HTTP_MAX_BODY - 1;
+            memcpy(req->body, body_start, body_len);
+            req->body[body_len] = '\0';
+            req->body_len = body_len;
+        }
+    }
+
+    return 0;
+}
+
+int http_handle_request(int conn_fd, const http_request_t *req,
+                        UserNode *users)
+{
+    char body[4096];
+    int  body_len   = 0;
+    int  status     = 200;
+    const char *status_text = "OK";
+    const char *content_type = "text/html; charset=utf-8";
+
+    if (strcmp(req->path, "/") == 0 && strcmp(req->method, "GET") == 0)
+    {
+        body_len = snprintf(body, sizeof(body),
+            "<!DOCTYPE html>\n"
+            "<html>\n"
+            "<head><title>MiniWeb</title></head>\n"
+            "<body>\n"
+            "<h1>Hello, HTTP!</h1>\n"
+            "</body>\n"
+            "</html>\n");
+    }
+    else if (strcmp(req->path, "/hello") == 0 &&
+             strcmp(req->method, "GET") == 0)
+    {
+        content_type = "text/plain";
+        body_len = snprintf(body, sizeof(body), "Hello, Web!\n");
+    }
+    else if (strncmp(req->path, "/users/", 7) == 0 &&
+             strcmp(req->method, "GET") == 0)
+    {
+        content_type = "text/plain";
+        const char *name = req->path + 7;
+        UserNode *p = users->next;
+        int found = 0;
+        while (p != NULL)
+        {
+            if (strcmp(p->data.username, name) == 0)
+            {
+                body_len = snprintf(body, sizeof(body),
+                    "FOUND %s %s %s\n",
+                    p->data.username, p->data.password, p->data.phone);
+                found = 1;
+                break;
+            }
+            p = p->next;
+        }
+        if (!found)
+            body_len = snprintf(body, sizeof(body),
+                "NOT_FOUND %s\n", name);
+    }
+    else if (strcmp(req->path, "/echo") == 0 &&
+             strcmp(req->method, "POST") == 0)
+    {
+        content_type = "text/plain";
+        if (req->body_len > 0)
+        {
+            body_len = req->body_len;
+            if (body_len >= (int)sizeof(body))
+                body_len = (int)sizeof(body) - 1;
+            memcpy(body, req->body, body_len);
+            body[body_len] = '\0';
+        }
+    }
+    else if (strncmp(req->path, "/missing", 8) == 0)
+    {
+        status = 404;
+        status_text = "Not Found";
+        content_type = "text/plain";
+        body_len = snprintf(body, sizeof(body),
+            "404 Not Found: %s\n", req->path);
+    }
+    else if (strcmp(req->method, "GET") != 0 &&
+             strcmp(req->method, "POST") != 0)
+    {
+        status = 405;
+        status_text = "Method Not Allowed";
+        content_type = "text/plain";
+        body_len = snprintf(body, sizeof(body),
+            "405 Method Not Allowed: %s\n", req->method);
+    }
+    else
+    {
+        status = 404;
+        status_text = "Not Found";
+        content_type = "text/plain";
+        body_len = snprintf(body, sizeof(body),
+            "404 Not Found: %s\n", req->path);
+    }
+
+    int total = dprintf(conn_fd,
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        status, status_text, content_type, body_len);
+    if (total < 0) return -1;
+
+    if (body_len > 0)
+    {
+        ssize_t sent = send(conn_fd, body, body_len, 0);
+        if (sent < 0) return -1;
+        total += (int)sent;
+    }
+
+    return total;
 }
