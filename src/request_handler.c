@@ -16,6 +16,8 @@ static int validate_path(const char *doc_root, const char *req_path,
                          char *real_path, size_t rp_sz);
 static int serve_static_file(int conn_fd, const char *real_path,
                              int *status_code);
+static int handle_search(int conn_fd, const http_request_t *req,
+                         int *status_code);
 
 /*
  * 请求格式: "GET /<path>"
@@ -320,6 +322,23 @@ int http_handle_request(int conn_fd, const http_request_t *req,
             return total;
         }
 
+        /* /search?class=... */
+        {
+            const char *qm = strchr(req->path, '?');
+            size_t plen = qm ? (size_t)(qm - req->path) : strlen(req->path);
+            if (plen == 7 && strncmp(req->path, "/search", 7) == 0)
+        {
+            int total = handle_search(conn_fd, req, &status);
+            if (total >= 0)
+            {
+                if (status_code) *status_code = status;
+                return total;
+            }
+            /* handle_search 失败: 用 send_error 发送错误响应 */
+            goto send_error;
+        }
+        }
+
         /* 回退到静态文件: 规范化路径: 去 ?参数, / → /index.html */
         char norm[512];
         if (normalize_path(req->path, norm, sizeof(norm)) != 0)
@@ -345,6 +364,19 @@ int http_handle_request(int conn_fd, const http_request_t *req,
             return total;
         }
         /* 失败 → 发送错误响应 */
+        goto send_error;
+    }
+
+    /* ---- POST /search ---- */
+    if (strncmp(req->path, "/search", 7) == 0 &&
+        strcmp(req->method, "POST") == 0)
+    {
+        int total = handle_search(conn_fd, req, &status);
+        if (total >= 0)
+        {
+            if (status_code) *status_code = status;
+            return total;
+        }
         goto send_error;
     }
 
@@ -603,4 +635,312 @@ static int serve_static_file(int conn_fd, const char *real_path,
     close(file_fd);
     *status_code = 200;
     return total;
+}
+
+/* ================================================================
+ * W3D3: GET/POST 动态查询
+ * ================================================================ */
+
+/* ---- URL 解码: %HH → 字符, + → 空格 ---- */
+static int url_decode(const char *src, char *dst, int dst_sz)
+{
+    int j = 0;
+    for (int i = 0; src[i] && j < dst_sz - 1; i++)
+    {
+        if (src[i] == '+')
+        {
+            dst[j++] = ' ';
+        }
+        else if (src[i] == '%' && src[i+1] && src[i+2])
+        {
+            char hex[3] = { src[i+1], src[i+2], '\0' };
+            dst[j++] = (char)strtol(hex, NULL, 16);
+            i += 2;
+        }
+        else
+        {
+            dst[j++] = src[i];
+        }
+    }
+    dst[j] = '\0';
+    return j;
+}
+
+/* ---- 查询参数解析: 从 query string 提取指定 key 的值 ---- */
+static const char *get_query_param(const char *query, const char *key)
+{
+    if (query == NULL || query[0] == '\0') return NULL;
+    static char value[256];
+    int key_len = strlen(key);
+
+    const char *p = query;
+    while (*p)
+    {
+        if (strncmp(p, key, key_len) == 0 && p[key_len] == '=')
+        {
+            p += key_len + 1;
+            const char *end = strchr(p, '&');
+            int vlen = end ? (int)(end - p) : (int)strlen(p);
+            if (vlen >= (int)sizeof(value)) vlen = (int)sizeof(value) - 1;
+            url_decode(p, value, vlen + 1);
+            return value;
+        }
+        p = strchr(p, '&');
+        if (p == NULL) break;
+        p++;
+    }
+    return NULL;
+}
+
+/* ---- HTML 转义: 防止注入 ---- */
+static void html_escape(const char *src, char *dst, int dst_sz)
+{
+    int j = 0;
+    for (int i = 0; src[i] && j < dst_sz - 8; i++)
+    {
+        switch (src[i]) {
+        case '&':  memcpy(dst + j, "&amp;", 5);  j += 5; break;
+        case '<':  memcpy(dst + j, "&lt;", 4);   j += 4; break;
+        case '>':  memcpy(dst + j, "&gt;", 4);   j += 4; break;
+        case '"':  memcpy(dst + j, "&quot;", 6); j += 6; break;
+        case '\'': memcpy(dst + j, "&#39;", 5);  j += 5; break;
+        default:   dst[j++] = src[i]; break;
+        }
+    }
+    dst[j] = '\0';
+}
+
+/* ---- 生成查询表单 HTML ---- */
+static int build_search_form(char *buf, int buf_sz)
+{
+    return snprintf(buf, buf_sz,
+        "<!DOCTYPE html>\n"
+        "<html>\n"
+        "<head><meta charset=\"UTF-8\">"
+        "<title>Search</title></head>\n"
+        "<body>\n"
+        "<h1>Student Search</h1>\n"
+        "<form action=\"/search\" method=\"GET\""
+        " accept-charset=\"UTF-8\">\n"
+        "<label>Class: <input name=\"class\""
+        " placeholder=\"e.g. 2011\"></label><br>\n"
+        "<label>Keyword: <input name=\"keyword\""
+        " placeholder=\"name or id\"></label><br>\n"
+        "<button type=\"submit\">Search</button>\n"
+        "</form>\n"
+        "<p>Also try POST /search with"
+        " application/x-www-form-urlencoded</p>\n"
+        "</body>\n"
+        "</html>\n");
+}
+
+/* ---- 搜索数据文件并生成结果 HTML ---- */
+static int build_search_result(const char *class_val, const char *keyword,
+                                char *buf, int buf_sz)
+{
+    /* class 校验: 4位数字 */
+    if (strlen(class_val) != 4) return -1;
+    for (int i = 0; i < 4; i++)
+        if (class_val[i] < '0' || class_val[i] > '9') return -1;
+
+    /* keyword 校验: 1~64字节 */
+    int kw_len = strlen(keyword);
+    if (kw_len < 1 || kw_len > 64) return -1;
+
+    /* 构造文件路径: data/<class>.txt */
+    char fpath[128];
+    snprintf(fpath, sizeof(fpath), "data/%s.txt", class_val);
+
+    /* 安全检查: realpath 限定在 data/ 内 */
+    char real_fpath[512];
+    if (realpath(fpath, real_fpath) == NULL)
+        return -2;  /* 文件不存在 */
+
+    char data_root[512];
+    if (realpath("data", data_root) == NULL) return -2;
+    size_t dr_len = strlen(data_root);
+    if (strncmp(real_fpath, data_root, dr_len) != 0 ||
+        (real_fpath[dr_len] != '/' && real_fpath[dr_len] != '\0'))
+        return -2;
+
+    /* 打开文件搜索 */
+    FILE *fp = fopen(real_fpath, "r");
+    if (fp == NULL) return -2;
+
+    /* 先生成 HTML 头部 */
+    int pos = snprintf(buf, buf_sz,
+        "<!DOCTYPE html>\n"
+        "<html>\n"
+        "<head><meta charset=\"UTF-8\">"
+        "<title>Search Result</title></head>\n"
+        "<body>\n"
+        "<h1>Search: class=%s, keyword=%s</h1>\n"
+        "<table border=\"1\"><tr>"
+        "<th>ID</th><th>Name</th><th>Gender</th></tr>\n",
+        class_val, keyword);
+
+    char line[256];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp))
+    {
+        /* 去掉换行 */
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+        if (line[0] == '\0') continue;
+
+        /* 在整行中搜索 keyword */
+        if (strstr(line, keyword) == NULL) continue;
+
+        /* 按 \t 拆分: id, name, gender */
+        char *id     = strtok(line, "\t");
+        char *name   = strtok(NULL, "\t");
+        char *gender = strtok(NULL, "\t");
+        if (id == NULL || name == NULL || gender == NULL) continue;
+
+        char eid[64], ename[128], egender[16];
+        html_escape(id,     eid,     sizeof(eid));
+        html_escape(name,   ename,   sizeof(ename));
+        html_escape(gender, egender, sizeof(egender));
+
+        pos += snprintf(buf + pos, buf_sz - pos,
+            "<tr><td>%s</td><td>%s</td><td>%s</td></tr>\n",
+            eid, ename, egender);
+        found++;
+    }
+    fclose(fp);
+
+    if (!found)
+        pos += snprintf(buf + pos, buf_sz - pos,
+            "<tr><td colspan=\"3\">No results found</td></tr>\n");
+
+    pos += snprintf(buf + pos, buf_sz - pos,
+        "</table>\n"
+        "<p><a href=\"/search\">Back to search</a></p>\n"
+        "</body>\n</html>\n");
+
+    return pos;  /* 返回总字节数 */
+}
+
+/* ---- 处理 /search 路由 (GET 表单 / GET 查询 / POST 查询) ---- */
+static int handle_search(int conn_fd, const http_request_t *req,
+                         int *status_code)
+{
+    const char *query = NULL;
+    char decoded_body[4096];
+
+    /* 确定参数来源 */
+    if (strcmp(req->method, "GET") == 0)
+    {
+        /* GET: 从 URL 中提取 ? 后面的查询字符串 */
+        const char *qmark = strchr(req->path, '?');
+        if (qmark)
+        {
+            /* 路径中有 ? → 查询模式 */
+            query = qmark + 1;
+        }
+        else
+        {
+            /* 无 ? → 返回查询表单 */
+            char form[4096];
+            int form_len = build_search_form(form, sizeof(form));
+            int total = dprintf(conn_fd,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/html; charset=utf-8\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n"
+                "\r\n", form_len);
+            if (total < 0) { *status_code = 500; return -1; }
+            if (send_all(conn_fd, form, (size_t)form_len) != 0)
+            { *status_code = 500; return -1; }
+            *status_code = 200;
+            return total + form_len;
+        }
+    }
+    else if (strcmp(req->method, "POST") == 0)
+    {
+        /* POST: 从请求体解析 */
+        const char *ct = http_get_header(req, "Content-Type");
+        if (ct == NULL || strstr(ct, "application/x-www-form-urlencoded") == NULL)
+        {
+            char eb[64];
+            int elen = snprintf(eb, sizeof(eb),
+                "415 Unsupported Media Type\n");
+            dprintf(conn_fd,
+                "HTTP/1.1 415 Unsupported Media Type\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n\r\n", elen);
+            send_all(conn_fd, eb, (size_t)elen);
+            *status_code = 415;
+            return -1;
+        }
+        if (req->body_len > 4096)
+        {
+            char eb[64];
+            int elen = snprintf(eb, sizeof(eb),
+                "413 Content Too Large\n");
+            dprintf(conn_fd,
+                "HTTP/1.1 413 Content Too Large\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n\r\n", elen);
+            send_all(conn_fd, eb, (size_t)elen);
+            *status_code = 413;
+            return -1;
+        }
+        memcpy(decoded_body, req->body, req->body_len);
+        decoded_body[req->body_len] = '\0';
+        query = decoded_body;
+    }
+    else
+    {
+        *status_code = 405;
+        return -1;
+    }
+
+    /* 解析参数 */
+    /* get_query_param 使用 static 缓冲区, 每次调用后立即复制 */
+    char class_buf[16], kw_buf[128];
+    const char *class_val = NULL;
+    const char *keyword   = NULL;
+    {
+        const char *v = get_query_param(query, "class");
+        if (v) { strncpy(class_buf, v, sizeof(class_buf)-1);
+                 class_buf[sizeof(class_buf)-1]='\0'; class_val=class_buf; }
+    }
+    {
+        const char *v = get_query_param(query, "keyword");
+        if (v) { strncpy(kw_buf, v, sizeof(kw_buf)-1);
+                 kw_buf[sizeof(kw_buf)-1]='\0'; keyword=kw_buf; }
+    }
+
+    if (class_val == NULL || keyword == NULL)
+    {
+        *status_code = 400;
+        return -1;
+    }
+
+    /* 搜索 */
+    char result[16384];
+    int result_len = build_search_result(class_val, keyword,
+                                          result, sizeof(result));
+    if (result_len < 0)
+    {
+        if (result_len == -2) *status_code = 404;
+        else *status_code = 400;
+        return -1;
+    }
+
+    /* 发送 HTML 结果 */
+    int total = dprintf(conn_fd,
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/html; charset=utf-8\r\n"
+        "Content-Length: %d\r\n"
+        "Connection: close\r\n"
+        "\r\n", result_len);
+    if (total < 0) { *status_code = 500; return -1; }
+    if (send_all(conn_fd, result, (size_t)result_len) != 0)
+    { *status_code = 500; return -1; }
+    *status_code = 200;
+    return total + result_len;
 }
