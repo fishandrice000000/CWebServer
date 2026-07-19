@@ -1,0 +1,24 @@
+# Debug Log - W3D2 HTTP 处理静态资源
+
+## 问题 1：静态文件服务导致旧版路由丢失
+
+# 使用的命令
+curl -s http://127.0.0.1:8080/hello
+
+# 报错内容
+返回 404 Not Found, 但 V1.1 中该路由返回 "Hello, Web!" (200).
+
+# 原因
+http_handle_request 重构时将所有 GET 请求统一路由到 serve_static_file,
+未保留 V1.1 的 /hello 和 /users/<name> 路由.
+
+# 解决方法
+在 GET 分支中先检查 /hello 和 /users/<name> 路由,
+匹配不到时再回退到静态文件服务.
+
+# 验证
+make                # 零警告
+curl /hello         # Hello, Web! (200)
+curl /users/zhangsan # FOUND zhangsan (200)
+curl /               # HTML 首页 (200)
+curl /css/style.css  # CSS 文件 (200)
