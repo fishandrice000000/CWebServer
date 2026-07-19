@@ -179,6 +179,7 @@ make clean
 | W2D4 | I/O 多路复用、select、TCP 多客户端文本通信 | ✅ 完成 |
 | W2D5 | epoll、高并发模型、V1.0 epoll HTTP 服务器 | ✅ 完成 |
 | W3D1 | HTTP 协议解析、请求/响应、日志系统 | ✅ 完成 |
+| W3D2 | HTTP 静态资源处理、MIME、路径安全 | ✅ 完成 |
 
 详见：
 - [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
@@ -192,3 +193,4 @@ make clean
 - [`docs/project/what_we_have_done/W2D4.md`](docs/project/what_we_have_done/W2D4.md)
 - [`docs/project/what_we_have_done/W2D5.md`](docs/project/what_we_have_done/W2D5.md)
 - [`docs/project/what_we_have_done/W3D1.md`](docs/project/what_we_have_done/W3D1.md)
+- [`docs/project/what_we_have_done/W3D2.md`](docs/project/what_we_have_done/W3D2.md)
