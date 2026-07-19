@@ -274,10 +274,53 @@ int http_handle_request(int conn_fd, const http_request_t *req,
 {
     int status = 200;
 
-    /* ---- GET 请求: 静态文件 ---- */
+    /* ---- GET 请求 ---- */
     if (strcmp(req->method, "GET") == 0)
     {
-        /* 规范化路径: 去 ?参数, / → /index.html */
+        /* 保留旧版路由 */
+        if (strcmp(req->path, "/hello") == 0)
+        {
+            const char *h = "Hello, Web!\n";
+            int hlen = (int)strlen(h);
+            int total = dprintf(conn_fd,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n"
+                "\r\n%s", hlen, h);
+            if (status_code) *status_code = 200;
+            return total;
+        }
+        if (strncmp(req->path, "/users/", 7) == 0)
+        {
+            char ub[512];
+            int ulen = 0;
+            const char *name = req->path + 7;
+            UserNode *p = users->next;
+            while (p != NULL)
+            {
+                if (strcmp(p->data.username, name) == 0)
+                {
+                    ulen = snprintf(ub, sizeof(ub),
+                        "FOUND %s %s %s\n",
+                        p->data.username, p->data.password, p->data.phone);
+                    break;
+                }
+                p = p->next;
+            }
+            if (ulen == 0)
+                ulen = snprintf(ub, sizeof(ub), "NOT_FOUND %s\n", name);
+            int total = dprintf(conn_fd,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n"
+                "\r\n%s", ulen, ub);
+            if (status_code) *status_code = 200;
+            return total;
+        }
+
+        /* 回退到静态文件: 规范化路径: 去 ?参数, / → /index.html */
         char norm[512];
         if (normalize_path(req->path, norm, sizeof(norm)) != 0)
         {
