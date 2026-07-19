@@ -9,6 +9,14 @@
 
 #define MAX_LINE 256
 
+/* W3D2: 前向声明 */
+static int send_all(int fd, const char *data, size_t len);
+static int normalize_path(const char *raw_path, char *out, size_t out_sz);
+static int validate_path(const char *doc_root, const char *req_path,
+                         char *real_path, size_t rp_sz);
+static int serve_static_file(int conn_fd, const char *real_path,
+                             int *status_code);
+
 /*
  * 请求格式: "GET /<path>"
  * 支持:
@@ -261,109 +269,295 @@ int http_parse_request(const char *data, int len, http_request_t *req)
 }
 
 int http_handle_request(int conn_fd, const http_request_t *req,
-                        UserNode *users, int *status_code)
+                        UserNode *users, int *status_code,
+                        const char *doc_root)
 {
-    char body[4096];
-    int  body_len   = 0;
-    int  status     = 200;
-    const char *status_text = "OK";
-    const char *content_type = "text/html; charset=utf-8";
+    int status = 200;
 
-    if (strcmp(req->path, "/") == 0 && strcmp(req->method, "GET") == 0)
+    /* ---- GET 请求: 静态文件 ---- */
+    if (strcmp(req->method, "GET") == 0)
     {
-        body_len = snprintf(body, sizeof(body),
-            "<!DOCTYPE html>\n"
-            "<html>\n"
-            "<head><title>MiniWeb</title></head>\n"
-            "<body>\n"
-            "<h1>Hello, HTTP!</h1>\n"
-            "</body>\n"
-            "</html>\n");
-    }
-    else if (strcmp(req->path, "/hello") == 0 &&
-             strcmp(req->method, "GET") == 0)
-    {
-        content_type = "text/plain";
-        body_len = snprintf(body, sizeof(body), "Hello, Web!\n");
-    }
-    else if (strncmp(req->path, "/users/", 7) == 0 &&
-             strcmp(req->method, "GET") == 0)
-    {
-        content_type = "text/plain";
-        const char *name = req->path + 7;
-        UserNode *p = users->next;
-        int found = 0;
-        while (p != NULL)
+        /* 规范化路径: 去 ?参数, / → /index.html */
+        char norm[512];
+        if (normalize_path(req->path, norm, sizeof(norm)) != 0)
         {
-            if (strcmp(p->data.username, name) == 0)
-            {
-                body_len = snprintf(body, sizeof(body),
-                    "FOUND %s %s %s\n",
-                    p->data.username, p->data.password, p->data.phone);
-                found = 1;
-                break;
-            }
-            p = p->next;
+            status = 400;
+            goto send_error;
         }
-        if (!found)
-            body_len = snprintf(body, sizeof(body),
-                "NOT_FOUND %s\n", name);
-    }
-    else if (strcmp(req->path, "/echo") == 0 &&
-             strcmp(req->method, "POST") == 0)
-    {
-        content_type = "text/plain";
-        if (req->body_len > 0)
+
+        /* 安全检查 + realpath */
+        char real_path[512];
+        int sec = validate_path(doc_root, norm, real_path, sizeof(real_path));
+        if (sec != 0)
         {
-            body_len = req->body_len;
-            if (body_len >= (int)sizeof(body))
-                body_len = (int)sizeof(body) - 1;
-            memcpy(body, req->body, body_len);
-            body[body_len] = '\0';
+            status = sec;  /* 403, 404 等 */
+            goto send_error;
+        }
+
+        /* 服务静态文件 */
+        int total = serve_static_file(conn_fd, real_path, &status);
+        if (total >= 0)
+        {
+            if (status_code) *status_code = status;
+            return total;
+        }
+        /* 失败 → 发送错误响应 */
+        goto send_error;
+    }
+
+    /* ---- POST /echo ---- */
+    if (strcmp(req->path, "/echo") == 0 && strcmp(req->method, "POST") == 0)
+    {
+        /* 回显请求体 */
+        const char *body = req->body;
+        int body_len = req->body_len;
+        if (body_len > 0)
+        {
+            int total = dprintf(conn_fd,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: %d\r\n"
+                "Connection: close\r\n"
+                "\r\n", body_len);
+            if (total < 0) { status = 500; goto send_error; }
+            if (send_all(conn_fd, body, (size_t)body_len) != 0)
+            { status = 500; goto send_error; }
+            if (status_code) *status_code = 200;
+            return total + body_len;
+        }
+        else
+        {
+            int total = dprintf(conn_fd,
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Type: text/plain\r\n"
+                "Content-Length: 0\r\n"
+                "Connection: close\r\n"
+                "\r\n");
+            if (status_code) *status_code = 200;
+            return total;
         }
     }
-    else if (strncmp(req->path, "/missing", 8) == 0)
-    {
-        status = 404;
-        status_text = "Not Found";
-        content_type = "text/plain";
-        body_len = snprintf(body, sizeof(body),
-            "404 Not Found: %s\n", req->path);
-    }
-    else if (strcmp(req->method, "GET") != 0 &&
-             strcmp(req->method, "POST") != 0)
+
+    /* ---- 非 GET/POST → 405 ---- */
+    if (strcmp(req->method, "GET") != 0 &&
+        strcmp(req->method, "POST") != 0)
     {
         status = 405;
-        status_text = "Method Not Allowed";
-        content_type = "text/plain";
-        body_len = snprintf(body, sizeof(body),
-            "405 Method Not Allowed: %s\n", req->method);
-    }
-    else
-    {
-        status = 404;
-        status_text = "Not Found";
-        content_type = "text/plain";
-        body_len = snprintf(body, sizeof(body),
-            "404 Not Found: %s\n", req->path);
+        goto send_error;
     }
 
-    int total = dprintf(conn_fd,
-        "HTTP/1.1 %d %s\r\n"
+    /* ---- 其他 POST 路径 → 404 ---- */
+    status = 404;
+
+send_error:
+    {
+        const char *status_text;
+        switch (status) {
+        case 400: status_text = "Bad Request"; break;
+        case 403: status_text = "Forbidden"; break;
+        case 404: status_text = "Not Found"; break;
+        case 405: status_text = "Method Not Allowed"; break;
+        default:  status_text = "Internal Server Error"; status = 500; break;
+        }
+
+        char err_body[256];
+        int err_len = snprintf(err_body, sizeof(err_body),
+            "%d %s: %s\n", status, status_text, req->path);
+        int total = dprintf(conn_fd,
+            "HTTP/1.1 %d %s\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: close\r\n"
+            "\r\n",
+            status, status_text, err_len);
+        if (total < 0) { if (status_code) *status_code = status; return -1; }
+        if (send_all(conn_fd, err_body, (size_t)err_len) != 0)
+        { if (status_code) *status_code = status; return -1; }
+        if (status_code) *status_code = status;
+        return total + err_len;
+    }
+}
+
+/* ================================================================
+ * W3D2: 静态资源文件服务
+ * ================================================================ */
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <errno.h>
+
+/* ---- MIME 类型映射 ---- */
+static const char *get_mime_type(const char *path)
+{
+    const char *ext = strrchr(path, '.');
+    if (ext == NULL) return "application/octet-stream";
+
+    if (strcasecmp(ext, ".html") == 0 || strcasecmp(ext, ".htm") == 0)
+        return "text/html; charset=utf-8";
+    if (strcasecmp(ext, ".css") == 0)
+        return "text/css; charset=utf-8";
+    if (strcasecmp(ext, ".js") == 0)
+        return "text/javascript; charset=utf-8";
+    if (strcasecmp(ext, ".json") == 0)
+        return "application/json; charset=utf-8";
+    if (strcasecmp(ext, ".jpeg") == 0 || strcasecmp(ext, ".jpg") == 0)
+        return "image/jpeg";
+    if (strcasecmp(ext, ".png") == 0)
+        return "image/png";
+    if (strcasecmp(ext, ".gif") == 0)
+        return "image/gif";
+    if (strcasecmp(ext, ".ico") == 0)
+        return "image/vnd.microsoft.icon";
+    if (strcasecmp(ext, ".svg") == 0)
+        return "image/svg+xml";
+    if (strcasecmp(ext, ".txt") == 0)
+        return "text/plain; charset=utf-8";
+
+    return "application/octet-stream";
+}
+
+/* ---- 可靠发送: 处理部分发送和 EINTR ---- */
+static int send_all(int fd, const char *data, size_t len)
+{
+    size_t sent = 0;
+    while (sent < len)
+    {
+        ssize_t n = send(fd, data + sent, len - sent, 0);
+        if (n > 0)
+            sent += (size_t)n;
+        else if (n < 0 && errno == EINTR)
+            continue;
+        else
+            return -1;
+    }
+    return 0;
+}
+
+/* ---- 规范化路径: 去查询参数, 映射 / → /index.html ---- */
+static int normalize_path(const char *raw_path, char *out, size_t out_sz)
+{
+    /* 去除 ? 查询参数 */
+    const char *q = strchr(raw_path, '?');
+    size_t len = q ? (size_t)(q - raw_path) : strlen(raw_path);
+
+    if (len >= out_sz) len = out_sz - 1;
+    memcpy(out, raw_path, len);
+    out[len] = '\0';
+
+    /* / 映射为 /index.html */
+    if (strcmp(out, "/") == 0)
+    {
+        if (out_sz < 12) return -1;
+        strcpy(out, "/index.html");
+    }
+
+    return 0;
+}
+
+/* ---- 路径安全检查: 拒绝 .., 验证 realpath 在 doc_root 内 ---- */
+static int validate_path(const char *doc_root, const char *req_path,
+                         char *real_path, size_t rp_sz)
+{
+    /* 拒绝包含 .. 的路径 */
+    if (strstr(req_path, ".."))
+        return 403;
+
+    /* 构造完整路径: doc_root + req_path */
+    char full[512];
+    int n = snprintf(full, sizeof(full), "%s%s", doc_root, req_path);
+    if (n < 0 || n >= (int)sizeof(full)) return 400;
+
+    /* realpath 解析符号链接并得到绝对路径 */
+    if (realpath(full, real_path) == NULL)
+    {
+        /* 文件不存在: 404 */
+        if (errno == ENOENT || errno == ENOTDIR)
+            return 404;
+        if (errno == EACCES)
+            return 403;
+        return 500;
+    }
+
+    /* 获取 doc_root 的绝对路径 */
+    char root_real[512];
+    if (realpath(doc_root, root_real) == NULL)
+        return 500;
+
+    size_t root_len = strlen(root_real);
+
+    /* real_path 必须以 root_real 开头 */
+    if (strncmp(real_path, root_real, root_len) != 0)
+        return 403;
+    /* 并且紧接 \0 或 / (防止 /www-evil 匹配 /www) */
+    if (real_path[root_len] != '\0' && real_path[root_len] != '/')
+        return 403;
+
+    return 0;
+}
+
+/* ---- 发送静态文件响应 ---- */
+static int serve_static_file(int conn_fd, const char *real_path,
+                             int *status_code)
+{
+    /* stat() 获取文件元数据 */
+    struct stat st;
+    if (stat(real_path, &st) != 0)
+    {
+        if (errno == ENOENT || errno == ENOTDIR)
+            *status_code = 404;
+        else if (errno == EACCES)
+            *status_code = 403;
+        else
+            *status_code = 500;
+        return -1;
+    }
+
+    /* 只允许普通文件 */
+    if (!S_ISREG(st.st_mode))
+    {
+        *status_code = 403;
+        return -1;
+    }
+
+    /* 打开文件 */
+    int file_fd = open(real_path, O_RDONLY);
+    if (file_fd < 0)
+    {
+        if (errno == EACCES) *status_code = 403;
+        else if (errno == ENOENT) *status_code = 404;
+        else *status_code = 500;
+        return -1;
+    }
+
+    /* MIME */
+    const char *mime = get_mime_type(real_path);
+
+    /* 发送响应头 */
+    off_t file_size = st.st_size;
+    int header_len = dprintf(conn_fd,
+        "HTTP/1.1 200 OK\r\n"
         "Content-Type: %s\r\n"
-        "Content-Length: %d\r\n"
+        "Content-Length: %ld\r\n"
         "Connection: close\r\n"
-        "\r\n",
-        status, status_text, content_type, body_len);
-    if (total < 0) { if (status_code) *status_code = status; return -1; }
+        "\r\n", mime, (long)file_size);
+    if (header_len < 0) { close(file_fd); *status_code = 500; return -1; }
 
-    if (body_len > 0)
+    /* 分块发送文件 body */
+    char buf[8192];
+    ssize_t nr;
+    int total = header_len;
+    while ((nr = read(file_fd, buf, sizeof(buf))) > 0)
     {
-        ssize_t sent = send(conn_fd, body, body_len, 0);
-        if (sent < 0) { if (status_code) *status_code = status; return -1; }
-        total += (int)sent;
+        if (send_all(conn_fd, buf, (size_t)nr) != 0)
+        {
+            close(file_fd);
+            *status_code = 500;
+            return -1;
+        }
+        total += (int)nr;
     }
 
-    if (status_code) *status_code = status;
+    close(file_fd);
+    *status_code = 200;
     return total;
 }
