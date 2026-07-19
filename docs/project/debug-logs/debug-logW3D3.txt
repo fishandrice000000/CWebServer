@@ -1,0 +1,30 @@
+# Debug Log - W3D3 HTTP 处理 GET 和 POST 请求
+
+## 问题 1：get_query_param 静态缓冲区被覆盖
+
+# 原因
+get_query_param 使用 static char value[256] 存放解析结果.
+连续两次调用时, 第二次调用会覆盖第一次的结果,
+导致 class_val 和 keyword 指向同一缓冲区, 都变成后一个值.
+
+# 解决方法
+每次 get_query_param 调用后立即 strncpy 到局部变量,
+再调用下一次 get_query_param.
+
+## 问题 2：/search 路由被静态文件服务拦截
+
+# 原因
+/search 路由放在 GET 静态文件分支之后.
+GET /search 先进入静态文件路径, serve_static_file 返回 404.
+
+# 解决方法
+将 /search 路由移到 GET 分支顶部 (旧路由之后, 静态文件之前).
+
+## 问题 3：handle_search 错误路径无响应
+
+# 原因
+handle_search 返回 -1 时只设置了 status_code, 未发送 HTTP 错误响应体.
+客户端收到空回复 (curl: Empty reply from server).
+
+# 解决方法
+handle_search 返回 -1 时 goto send_error 统一发送错误响应.
