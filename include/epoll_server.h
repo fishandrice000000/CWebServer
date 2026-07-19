@@ -10,6 +10,6 @@
  * 成功返回 0, 失败返回 -1.
  */
 int epoll_server_run(const char *host, int port, UserNode *users,
-                     int max_requests);
+                     int max_requests, const char *doc_root);
 
 #endif

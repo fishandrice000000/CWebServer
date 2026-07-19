@@ -37,7 +37,8 @@ typedef struct {
 static http_client_t clients[MAX_CLIENTS];
 
 /* ---- 处理一个客户端的完整 HTTP 请求 ---- */
-static void process_http_request(int idx, int epfd, UserNode *users)
+static void process_http_request(int idx, int epfd, UserNode *users,
+                                      const char *doc_root)
 {
     http_client_t *c = &clients[idx];
     http_request_t req;
@@ -62,7 +63,8 @@ static void process_http_request(int idx, int epfd, UserNode *users)
     }
 
     int sc = 200;
-    int resp_bytes = http_handle_request(c->fd, &req, users, &sc);
+    int resp_bytes = http_handle_request(c->fd, &req, users, &sc,
+                                         doc_root);
 
     /* 访问日志 */
     {
@@ -81,7 +83,7 @@ cleanup:
 }
 
 int epoll_server_run(const char *host, int port, UserNode *users,
-                     int max_requests)
+                     int max_requests, const char *doc_root)
 {
     int listen_fd, epfd;
     struct sockaddr_in server_addr;
@@ -289,7 +291,7 @@ int epoll_server_run(const char *host, int port, UserNode *users,
 
                 /* 请求完整 */
                 request_count++;
-                process_http_request(slot, epfd, users);
+                process_http_request(slot, epfd, users, doc_root);
             }
         }
     }
