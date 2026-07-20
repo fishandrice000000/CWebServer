@@ -1,0 +1,15 @@
+{
+    "server": {
+        "host": "127.0.0.1",
+        "port": 8080,
+        "document_root": "./www"
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "./logs/server.log"
+    },
+    "routes": [
+        {"method": "GET", "path": "/users", "handler": "users_get"},
+        {"method": "POST", "path": "/users", "handler": "users_create"}
+    ]
+}
