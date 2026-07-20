@@ -1,0 +1,21 @@
+# Debug Log - W3D4 配置文件与路由
+
+## 问题 1：POST 路由被同路径 GET 路由的 405 检查拦截
+
+# 原因
+路由分发循环对每个路由同时做匹配检查和 405 判断.
+当 path 匹配但 method 不匹配时立即 goto send_error.
+对于 GET /users 和 POST /users 两条路由,
+POST 请求先遇到 GET /users (path 匹配, method 不匹配) → 误判 405.
+
+# 解决方法
+将 405 判断移到循环外: 先遍历全部路由找精确匹配,
+未找到但 path 存在 → 405.
+
+## 问题 2：cJSON.h 预处理器语法错误
+
+# 原因
+extern "C" { 和 #endif 写在同一行, 预处理器无法正确解析.
+
+# 解决方法
+拆成两行.
