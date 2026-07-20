@@ -20,17 +20,18 @@ OBJS    = $(BUILDDIR)/main.o \
           $(BUILDDIR)/tcp_fork_server.o \
           $(BUILDDIR)/thread_pool.o \
           $(BUILDDIR)/tcp_pool_server.o \
-          $(BUILDDIR)/epoll_server.o
+          $(BUILDDIR)/epoll_server.o \
+          $(BUILDDIR)/cJSON.o
 
 $(shell mkdir -p $(BUILDDIR))
 
 $(BUILDDIR)/$(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o $@ $(LDFLAGS)
 
-$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h include/process_server.h include/thread_server.h include/tcp_server.h include/tcp_fork_server.h include/tcp_pool_server.h include/epoll_server.h
+$(BUILDDIR)/main.o: $(SRCDIR)/main.c include/config.h include/http_response.h include/log.h include/user_store.h include/user_index.h include/process_server.h include/thread_server.h include/tcp_server.h include/tcp_fork_server.h include/tcp_pool_server.h include/epoll_server.h include/cJSON.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/config.o: $(SRCDIR)/config.c include/config.h
+$(BUILDDIR)/config.o: $(SRCDIR)/config.c include/config.h include/cJSON.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILDDIR)/log.o: $(SRCDIR)/log.c include/log.h
@@ -66,7 +67,10 @@ $(BUILDDIR)/thread_pool.o: $(SRCDIR)/thread_pool.c include/thread_pool.h include
 $(BUILDDIR)/tcp_pool_server.o: $(SRCDIR)/tcp_pool_server.c include/tcp_pool_server.h include/thread_pool.h include/request_handler.h include/log.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILDDIR)/epoll_server.o: $(SRCDIR)/epoll_server.c include/epoll_server.h include/request_handler.h include/log.h
+$(BUILDDIR)/epoll_server.o: $(SRCDIR)/epoll_server.c include/epoll_server.h include/request_handler.h include/log.h include/config.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILDDIR)/cJSON.o: $(SRCDIR)/cJSON.c include/cJSON.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 .PHONY: run test01 test02 test03 test04 test05 test06 test07 test08 test10 clean test-clean
