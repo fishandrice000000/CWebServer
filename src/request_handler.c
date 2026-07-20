@@ -272,9 +272,59 @@ int http_parse_request(const char *data, int len, http_request_t *req)
 
 int http_handle_request(int conn_fd, const http_request_t *req,
                         UserNode *users, int *status_code,
-                        const char *doc_root)
+                        const char *doc_root,
+                        const route_config_t *routes, int route_count)
 {
     int status = 200;
+
+    /* ---- V1.4: 配置路由优先 ---- */
+    int path_in_routes = 0;
+    for (int i = 0; i < route_count; i++)
+    {
+        if (strcmp(req->method, routes[i].method) == 0 &&
+            strcmp(req->path, routes[i].path) == 0)
+        {
+            /* 命中配置路由 */
+            if (strcmp(routes[i].handler_name, "users_get") == 0)
+            {
+                char *page = "<html><body><h1>Users</h1>"
+                    "<p>GET /users — list users (placeholder)</p>"
+                    "</body></html>";
+                int plen = (int)strlen(page);
+                int total = dprintf(conn_fd,
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    "Content-Length: %d\r\n"
+                    "Connection: close\r\n"
+                    "\r\n%s", plen, page);
+                if (status_code) *status_code = 200;
+                return total;
+            }
+            if (strcmp(routes[i].handler_name, "users_create") == 0)
+            {
+                char *page = "<html><body><h1>Users</h1>"
+                    "<p>POST /users — create user (placeholder)</p>"
+                    "</body></html>";
+                int plen = (int)strlen(page);
+                int total = dprintf(conn_fd,
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    "Content-Length: %d\r\n"
+                    "Connection: close\r\n"
+                    "\r\n%s", plen, page);
+                if (status_code) *status_code = 200;
+                return total;
+            }
+        }
+        if (strcmp(req->path, routes[i].path) == 0)
+            path_in_routes = 1;
+    }
+    /* path 在路由表中存在但 method 不匹配 → 405 */
+    if (path_in_routes)
+    {
+        status = 405;
+        goto send_error;
+    }
 
     /* ---- GET 请求 ---- */
     if (strcmp(req->method, "GET") == 0)

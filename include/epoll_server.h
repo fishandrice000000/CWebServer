@@ -9,7 +9,10 @@
  * max_requests: 处理多少个请求后停止 (0 表示不限)
  * 成功返回 0, 失败返回 -1.
  */
+#include "config.h"
+
 int epoll_server_run(const char *host, int port, UserNode *users,
-                     int max_requests, const char *doc_root);
+                     int max_requests, const char *doc_root,
+                     const route_config_t *routes, int route_count);
 
 #endif

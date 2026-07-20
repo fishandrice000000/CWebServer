@@ -38,7 +38,9 @@ static http_client_t clients[MAX_CLIENTS];
 
 /* ---- 处理一个客户端的完整 HTTP 请求 ---- */
 static void process_http_request(int idx, int epfd, UserNode *users,
-                                      const char *doc_root)
+                                      const char *doc_root,
+                                      const route_config_t *routes,
+                                      int route_count)
 {
     http_client_t *c = &clients[idx];
     http_request_t req;
@@ -64,7 +66,7 @@ static void process_http_request(int idx, int epfd, UserNode *users,
 
     int sc = 200;
     int resp_bytes = http_handle_request(c->fd, &req, users, &sc,
-                                         doc_root);
+                                         doc_root, routes, route_count);
 
     /* 访问日志 */
     {
@@ -83,7 +85,8 @@ cleanup:
 }
 
 int epoll_server_run(const char *host, int port, UserNode *users,
-                     int max_requests, const char *doc_root)
+                     int max_requests, const char *doc_root,
+                     const route_config_t *routes, int route_count)
 {
     int listen_fd, epfd;
     struct sockaddr_in server_addr;
@@ -291,7 +294,8 @@ int epoll_server_run(const char *host, int port, UserNode *users,
 
                 /* 请求完整 */
                 request_count++;
-                process_http_request(slot, epfd, users, doc_root);
+                process_http_request(slot, epfd, users, doc_root,
+                                     routes, route_count);
             }
         }
     }

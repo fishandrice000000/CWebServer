@@ -41,7 +41,6 @@ int main(int argc, char *argv[])
 
     print_config(&config);
 
-    /* ---- V0.2: 用户管理子命令 ---- */
     if (argc >= 3) {
         UserNode *users = user_store_init();
         user_store_load(users, USERS_CSV);
@@ -67,7 +66,6 @@ int main(int argc, char *argv[])
             user_store_delete(users, argv[3]);
             user_store_save(users, USERS_CSV);
 
-        /* ---- V0.3: BST 索引子命令 ---- */
         } else if (strcmp(cmd, "index") == 0) {
             user_index_t *idx = user_index_init();
             user_index_build(idx, users);
@@ -81,9 +79,12 @@ int main(int argc, char *argv[])
             user_index_node_t *found = user_index_find(idx->root, argv[3]);
             if (found) {
                 printf("FOUND\n");
-                printf("%-16s %-24s %-16s\n", "USERNAME", "PASSWORD", "PHONE");
                 printf("%-16s %-24s %-16s\n",
-                       found->user->username, found->user->password, found->user->phone);
+                       "USERNAME", "PASSWORD", "PHONE");
+                printf("%-16s %-24s %-16s\n",
+                       found->user->username,
+                       found->user->password,
+                       found->user->phone);
             } else {
                 printf("NOT_FOUND\n");
             }
@@ -97,13 +98,11 @@ int main(int argc, char *argv[])
             user_index_destroy(idx->root);
             free(idx);
 
-        /* ---- V0.4: 多进程请求处理 ---- */
         } else if (strcmp(cmd, "process") == 0) {
             log_info("process_server: starting");
             process_requests("requests", "outputs", users);
             log_info("process_server: finished");
 
-        /* ---- V0.5: 多线程请求处理 ---- */
         } else if (strcmp(cmd, "threaded") == 0) {
             int num_workers = (argc >= 4) ? atoi(argv[3]) : 3;
             if (num_workers < 1) num_workers = 1;
@@ -111,13 +110,11 @@ int main(int argc, char *argv[])
             thread_server_run("requests", "outputs", users, num_workers);
             log_info("thread_server: finished");
 
-        /* ---- V0.6: TCP 网络服务 (单连接) ---- */
         } else if (strcmp(cmd, "serve") == 0) {
             log_info("tcp_server: starting");
             tcp_server_run(config.host, config.port, users);
             log_info("tcp_server: finished");
 
-        /* ---- V0.7: 多进程 TCP 网络服务 ---- */
         } else if (strcmp(cmd, "serve-fork") == 0) {
             int max_clients = (argc >= 4) ? atoi(argv[3]) : 0;
             if (max_clients < 0) max_clients = 0;
@@ -126,7 +123,6 @@ int main(int argc, char *argv[])
                                 max_clients);
             log_info("tcp_fork_server: finished");
 
-        /* ---- V0.8: 线程池 TCP 网络服务 ---- */
         } else if (strcmp(cmd, "serve-pool") == 0) {
             int num_workers = (argc >= 4) ? atoi(argv[3]) : 3;
             int max_clients = (argc >= 5) ? atoi(argv[4]) : 0;
@@ -137,24 +133,23 @@ int main(int argc, char *argv[])
                                 num_workers, max_clients);
             log_info("tcp_pool_server: finished");
 
-        /* ---- V1.0/W3D1: epoll HTTP 服务器 ---- */
         } else if (strcmp(cmd, "serve-epoll") == 0 ||
                    strcmp(cmd, "serve-http") == 0) {
             int max_requests = (argc >= 4) ? atoi(argv[3]) : 0;
             if (max_requests < 0) max_requests = 0;
-
-            /* 初始化访问日志 */
             access_log_init("logs/access.log");
-
             log_info("epoll_server: starting");
             epoll_server_run(config.host, config.port, users,
-                             max_requests, config.root);
+                             max_requests, config.document_root,
+                             config.routes, config.route_count);
             log_info("epoll_server: finished");
-
             access_log_close();
 
         } else {
-            printf("usage: %s conf/server.conf {list|find|add|delete|index|find-index|compare|process|serve|serve-fork|serve-pool|serve-epoll} [args...]\n", argv[0]);
+            printf("usage: %s conf/server.conf "
+                   "{list|find|add|delete|index|find-index|compare|"
+                   "process|serve|serve-fork|serve-pool|serve-http} "
+                   "[args...]\n", argv[0]);
         }
 
         user_store_destroy(users);
@@ -162,15 +157,12 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    /* ---- V0.1: HTTP 响应 ---- */
     log_info("document root loaded");
-
     if (build_hello_response(response, sizeof(response)) < 0) {
         log_error("failed to build response");
         log_close();
         return 1;
     }
-
     printf("%s", response);
 
     log_close();
