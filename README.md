@@ -43,9 +43,17 @@ CWebServer/
 │   ├── users.csv
 │   └── users_large.csv
 ├── config/                       # 配置文件
-│   └── server.conf
+│   ├── server.conf
+│   └── server.json
 ├── www/                          # 静态资源目录
-│   └── index.html
+│   ├── index.html                # 正式项目首页
+│   ├── css/
+│   │   └── style.css             # 响应式样式
+│   ├── js/
+│   │   └── app.js                # 交互式演示
+│   ├── img/
+│   │   └── logo.jpeg
+│   └── favicon.ico
 ├── test/                         # 测试脚本
 │   ├── test_day01.sh
 │   ├── test_day02.sh
@@ -183,6 +191,7 @@ make clean
 | W3D3 | HTTP GET/POST 动态查询、URL 解码、参数校验 | ✅ 完成 |
 | W3D4 | 配置文件与路由、JSON 解析、配置校验 | ✅ 完成 |
 | W3D5 | HTTP Basic 认证、Base64 解码、受保护路由 | ✅ 完成 |
+| 前端重构 | 正式项目首页、7 个交互演示区块、HTML 渲染、日志查看 | ✅ 完成 |
 
 详见：
 - [`docs/project/what_we_have_done/W1D1.md`](docs/project/what_we_have_done/W1D1.md)
@@ -200,3 +209,4 @@ make clean
 - [`docs/project/what_we_have_done/W3D3.md`](docs/project/what_we_have_done/W3D3.md)
 - [`docs/project/what_we_have_done/W3D4.md`](docs/project/what_we_have_done/W3D4.md)
 - [`docs/project/what_we_have_done/W3D5.md`](docs/project/what_we_have_done/W3D5.md)
+- [`docs/project/what_we_have_done/Frontend-Redesign.md`](docs/project/what_we_have_done/Frontend-Redesign.md)
