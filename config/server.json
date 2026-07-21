@@ -10,6 +10,8 @@
     },
     "routes": [
         {"method": "GET", "path": "/users", "handler": "users_get"},
-        {"method": "POST", "path": "/users", "handler": "users_create"}
+        {"method": "POST", "path": "/users", "handler": "users_create"},
+        {"method": "GET", "path": "/secured",
+         "handler": "secured_get", "auth": "basic"}
     ]
 }

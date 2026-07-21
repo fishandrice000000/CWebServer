@@ -116,6 +116,11 @@ int load_config(const char *path, server_config_t *config)
             if (hn->valuestring)
                 strncpy(config->routes[i].handler_name, hn->valuestring,
                         sizeof(config->routes[i].handler_name)-1);
+            /* auth (可选, 默认空) */
+            cJSON *auth = cJSON_GetObjectItem(r, "auth");
+            if (auth && auth->valuestring)
+                strncpy(config->routes[i].auth, auth->valuestring,
+                        sizeof(config->routes[i].auth)-1);
         }
         config->route_count = (n < MAX_ROUTES) ? n : MAX_ROUTES;
     }

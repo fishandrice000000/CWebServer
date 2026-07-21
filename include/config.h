@@ -7,6 +7,7 @@ typedef struct {
     char method[16];
     char path[256];
     char handler_name[64];
+    char auth[16];
 } route_config_t;
 
 typedef struct {
