@@ -1,15 +1,296 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>MiniWeb - Home</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CWebServer — 高性能 C 语言 Web 服务器</title>
 <link rel="stylesheet" href="/css/style.css">
 <link rel="icon" href="/favicon.ico">
 </head>
 <body>
-<h1>Hello from MiniWeb!</h1>
-<p>This page is served by a C web server.</p>
-<img src="/img/logo.jpeg" alt="logo" width="64" height="64">
+
+<!-- ========== Navigation ========== -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-brand">
+      <span class="brand-icon">&lt;/&gt;</span>
+      CWebServer
+    </a>
+    <button class="nav-toggle" id="navToggle" aria-label="Toggle menu">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#features">功能特性</a></li>
+      <li><a href="#api">API 路由</a></li>
+      <li><a href="#demo">在线演示</a></li>
+      <li><a href="https://github.com/fishandrice000000/CWebServer" target="_blank" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ========== Hero ========== -->
+<header class="hero">
+  <div class="hero-inner">
+    <div class="hero-badge">V1.5 &middot; epoll + Thread Pool</div>
+    <h1>高性能 C 语言 Web 服务器</h1>
+    <p class="hero-sub">
+      基于 Linux epoll 的 I/O 多路复用，支持 HTTP/1.1 协议解析、静态资源服务、
+      动态路由分发、JSON 配置驱动与 Basic 认证
+    </p>
+    <div class="hero-actions">
+      <a href="#demo" class="btn btn-primary">在线演示</a>
+      <a href="#api" class="btn btn-outline">API 文档</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat">
+        <span class="stat-num">C11</span>
+        <span class="stat-label">语言标准</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">epoll</span>
+        <span class="stat-label">I/O 模型</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">LT</span>
+        <span class="stat-label">触发模式</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">8 KB</span>
+        <span class="stat-label">缓冲区</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ========== Features ========== -->
+<section class="section" id="features">
+  <div class="section-inner">
+    <h2 class="section-title">功能特性</h2>
+    <p class="section-desc">从零构建，逐步迭代，覆盖 Linux 系统编程核心知识点</p>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">&#9881;</div>
+        <h3>JSON 配置驱动</h3>
+        <p>服务器端口、日志级别、文档根目录、路由表全部由 <code>server.json</code> 配置，启动时自动校验</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#9776;</div>
+        <h3>路由分发</h3>
+        <p>支持方法 + 路径精确匹配，可注册多个路由，自动返回 405 Method Not Allowed 或 404 Not Found</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#128274;</div>
+        <h3>Basic 认证</h3>
+        <p>路由级 HTTP Basic Authentication，Base64 凭据解码，未授权返回 401 + WWW-Authenticate</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#128196;</div>
+        <h3>静态文件服务</h3>
+        <p>支持 HTML / CSS / JS / 图片 / 图标等静态资源，自动 MIME 类型识别，路径穿越防护</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#128269;</div>
+        <h3>动态查询</h3>
+        <p>GET / POST 表单处理，URL 解码 (%HH, +)，查询参数解析，HTML 实体转义防 XSS</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#128221;</div>
+        <h3>访问日志</h3>
+        <p>标准 Apache 格式日志：时间、IP、方法、URL、状态码、字节数、User-Agent，可配置日志级别</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== Architecture ========== -->
+<section class="section section-alt" id="architecture">
+  <div class="section-inner">
+    <h2 class="section-title">技术架构</h2>
+    <p class="section-desc">Reactor 模式 + 非阻塞 I/O + 线程池，单进程处理万级并发连接</p>
+
+    <div class="arch-diagram">
+      <div class="arch-row">
+        <div class="arch-box arch-client">Client</div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-box arch-epoll">epoll_wait<br><small>事件循环</small></div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-box arch-parse">HTTP 解析<br><small>请求行/头/体</small></div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-box arch-dispatch">路由分发<br><small>方法+路径匹配</small></div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-box arch-handler">Handler<br><small>静态/动态/认证</small></div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-box arch-log">日志记录<br><small>access log</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== API Routes ========== -->
+<section class="section" id="api">
+  <div class="section-inner">
+    <h2 class="section-title">API 路由参考</h2>
+    <p class="section-desc">所有已注册路由，可通过配置文件扩展</p>
+
+    <table class="api-table">
+      <thead>
+        <tr><th>方法</th><th>路径</th><th>说明</th><th>认证</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="method method-get">GET</span></td><td><code>/</code></td><td>首页 (本页面)</td><td>—</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td><code>/hello</code></td><td>返回纯文本 "Hello, Web!"</td><td>—</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td><code>/users/&lt;name&gt;</code></td><td>查询用户是否存在</td><td>—</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td><code>/echo</code></td><td>回显请求体内容</td><td>—</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td><code>/search</code></td><td>学生信息查询 (表单)</td><td>—</td></tr>
+        <tr><td><span class="method method-post">POST</span></td><td><code>/search</code></td><td>学生信息查询 (POST)</td><td>—</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td><code>/secured</code></td><td>受保护页面</td><td>Basic</td></tr>
+        <tr><td><span class="method method-get">GET</span></td><td><code>/css/*</code> <code>/js/*</code> <code>/img/*</code></td><td>静态资源</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ========== Live Demo ========== -->
+<section class="section section-alt" id="demo">
+  <div class="section-inner">
+    <h2 class="section-title">在线演示</h2>
+    <p class="section-desc">所有请求均发送到本服务器，响应实时展示</p>
+
+    <!-- ====== 1. 静态资源 ====== -->
+    <div class="demo-block">
+      <h3 class="demo-heading">
+        <span class="demo-num">1</span> 首页与静态资源 <span class="demo-expect">→ 200 OK</span>
+      </h3>
+      <p class="demo-note">验证静态文件服务、MIME 类型识别与路径穿越防护。</p>
+      <div class="demo-btn-row">
+        <button class="btn btn-sm btn-demo" data-demo="static" data-path="/">GET / (首页)</button>
+        <button class="btn btn-sm btn-demo" data-demo="static" data-path="/css/style.css">GET /css/style.css</button>
+        <button class="btn btn-sm btn-demo" data-demo="static" data-path="/js/app.js">GET /js/app.js</button>
+      </div>
+      <pre class="demo-output" id="out-static"></pre>
+    </div>
+
+    <!-- ====== 2. GET 查询 ====== -->
+    <div class="demo-block">
+      <h3 class="demo-heading">
+        <span class="demo-num">2</span> GET 动态查询 <span class="demo-expect">→ 200 OK</span>
+      </h3>
+      <p class="demo-note">通过 URL 查询参数 <code>?class=&amp;keyword=</code> 搜索 <code>data/&lt;class&gt;.txt</code> 中的学生记录。下方同时展示原始 HTML 响应和渲染后的表格。</p>
+      <div class="demo-form">
+        <label>班级 <input type="text" id="getClass" value="2011" placeholder="例如 2011"></label>
+        <label>关键字 <input type="text" id="getKeyword" value="张" placeholder="姓名关键字"></label>
+        <button class="btn btn-sm btn-primary" id="btnGetSearch">GET /search 查询</button>
+      </div>
+      <div class="demo-result" id="result-get">
+        <pre class="demo-output" id="out-get-raw"></pre>
+        <div class="rendered-table" id="out-get-table"></div>
+      </div>
+    </div>
+
+    <!-- ====== 3. POST 查询 ====== -->
+    <div class="demo-block">
+      <h3 class="demo-heading">
+        <span class="demo-num">3</span> POST 动态查询 <span class="demo-expect">→ 200 OK</span>
+      </h3>
+      <p class="demo-note">请求体 <code>class=2011&amp;keyword=张</code>，Content-Type: application/x-www-form-urlencoded。下方同时展示原始 HTML 响应和渲染后的表格。</p>
+      <div class="demo-form">
+        <label>班级 <input type="text" id="postClass" value="2011" placeholder="例如 2011"></label>
+        <label>关键字 <input type="text" id="postKeyword" value="张" placeholder="姓名关键字"></label>
+        <button class="btn btn-sm btn-primary" id="btnPostSearch">POST /search 查询</button>
+      </div>
+      <div class="demo-result" id="result-post">
+        <pre class="demo-output" id="out-post-raw"></pre>
+        <div class="rendered-table" id="out-post-table"></div>
+      </div>
+    </div>
+
+    <!-- ====== 4. 路由配置生效 ====== -->
+    <div class="demo-block">
+      <h3 class="demo-heading">
+        <span class="demo-num">4</span> 配置文件 / 路由生效 <span class="demo-expect">→ 200</span>
+      </h3>
+      <p class="demo-note"><code>config/server.json</code> 中定义的路由表驱动请求分发。三个按钮分别验证三种路由来源：</p>
+      <ul class="demo-explain">
+        <li><strong>内置路由</strong> — <code>/hello</code> 硬编码在 C 代码中，不经过配置文件，返回纯文本 "Hello, Web!"</li>
+        <li><strong>JSON 配置路由</strong> — <code>GET /users</code> 在 <code>server.json</code> 路由表中定义 <code>{"method": "GET", "path": "/users", "handler": "users_get"}</code>，请求被路由表匹配并交给对应 handler 处理</li>
+        <li><strong>POST 回显</strong> — <code>/echo</code> 也是内置路由，将请求体原样返回，证明 POST 方法解析与消息体读取正常</li>
+      </ul>
+      <div class="demo-btn-row">
+        <button class="btn btn-sm btn-demo" data-demo="route" data-path="/hello" data-label="内置路由">GET /hello (内置路由)</button>
+        <button class="btn btn-sm btn-demo" data-demo="route" data-path="/users" data-label="JSON 配置路由">GET /users (JSON 配置路由)</button>
+      </div>
+      <div class="demo-form">
+        <label>POST body <input type="text" id="echoBody" value="Hello from CWebServer" placeholder="输入要回显的内容"></label>
+        <button class="btn btn-sm btn-demo" id="btnPostEcho">POST /echo 回显</button>
+      </div>
+      <div class="demo-result" id="result-route">
+        <pre class="demo-output" id="out-route-raw"></pre>
+        <div class="rendered-table" id="out-route-table"></div>
+      </div>
+    </div>
+
+    <!-- ====== 5. 404 错误处理 ====== -->
+    <div class="demo-block">
+      <h3 class="demo-heading">
+        <span class="demo-num">5</span> 不存在的资源 <span class="demo-expect">→ 404 Not Found</span>
+      </h3>
+      <p class="demo-note">请求未配置路由且不存在的文件路径，服务器返回 404。</p>
+      <div class="demo-btn-row">
+        <button class="btn btn-sm btn-demo" data-demo="error404" data-path="/this-does-not-exist">GET /this-does-not-exist</button>
+        <button class="btn btn-sm btn-demo" data-demo="error404" data-path="/admin/secret.txt">GET /admin/secret.txt</button>
+      </div>
+      <pre class="demo-output" id="out-404"></pre>
+    </div>
+
+    <!-- ====== 6. Basic 认证 ====== -->
+    <div class="demo-block">
+      <h3 class="demo-heading">
+        <span class="demo-num">6</span> Basic 认证测试 <span class="demo-expect">→ 401 / 200</span>
+      </h3>
+      <p class="demo-note">测试端点 <code>/api/auth-check</code>（与 <code>/secured</code> 认证逻辑相同，返回 JSON，<strong>永不弹浏览器登录框</strong>）。正确凭据：<code>student / lab123</code>。</p>
+      <ul class="demo-explain">
+        <li>用户名留空点击登录 → <strong>401</strong>（无凭据）</li>
+        <li>填入错误密码点击登录 → <strong>401</strong>（凭据无效）</li>
+        <li>填入正确凭据 <code>student / lab123</code> 点击登录 → <strong>200</strong>（认证通过）</li>
+      </ul>
+      <div class="demo-form">
+        <label>用户名 <input type="text" id="authUser" placeholder="student"></label>
+        <label>密码 <input type="password" id="authPass" placeholder="lab123"></label>
+        <button class="btn btn-sm btn-primary" id="btnAuthLogin">登录</button>
+      </div>
+      <pre class="demo-output" id="out-auth"></pre>
+    </div>
+
+    <!-- ====== 7. 日志展示 ====== -->
+    <div class="demo-block">
+      <h3 class="demo-heading">
+        <span class="demo-num">7</span> 访问日志 <span class="demo-expect">→ 不泄露凭据</span>
+      </h3>
+      <p class="demo-note">每次请求记录：时间、IP、方法、URL、状态码、字节数、User-Agent。认证凭据（Authorization 头、Base64 字符串、密码）<strong>不会出现</strong>在日志中。点击刷新按钮从服务器实时拉取日志内容。</p>
+      <div class="demo-btn-row">
+        <button class="btn btn-sm btn-primary" id="btnLogRefresh">刷新日志</button>
+        <span class="log-status" id="logStatus"></span>
+      </div>
+      <pre class="demo-output" id="out-log"></pre>
+    </div>
+
+  </div>
+</section>
+
+<!-- ========== Footer ========== -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-left">
+      <strong>CWebServer</strong> &mdash; 电子科技大学 信软学院 暑期工程实训
+    </div>
+    <div class="footer-right">
+      Built with C11 &middot; Linux &middot; epoll &middot; Make
+    </div>
+  </div>
+</footer>
+
 <script src="/js/app.js"></script>
 </body>
 </html>
