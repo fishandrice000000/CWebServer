@@ -18,6 +18,8 @@ static int serve_static_file(int conn_fd, const char *real_path,
                              int *status_code);
 static int handle_search(int conn_fd, const http_request_t *req,
                          int *status_code);
+static int basic_auth_check(const http_request_t *req);
+static int base64_decode(const char *src, char *dst, int dst_sz);
 
 /*
  * 请求格式: "GET /<path>"
@@ -284,7 +286,26 @@ int http_handle_request(int conn_fd, const http_request_t *req,
         if (strcmp(req->method, routes[i].method) == 0 &&
             strcmp(req->path, routes[i].path) == 0)
         {
-            /* 命中配置路由 */
+            /* 命中配置路由 — 先检查认证 */
+            if (strcmp(routes[i].auth, "basic") == 0)
+            {
+                int auth_result = basic_auth_check(req);
+                if (auth_result != 0)
+                {
+                    char *page = "401 Unauthorized\n";
+                    int plen = (int)strlen(page);
+                    dprintf(conn_fd,
+                        "HTTP/1.1 401 Unauthorized\r\n"
+                        "WWW-Authenticate: Basic realm=\"mini_webserver\"\r\n"
+                        "Content-Type: text/plain\r\n"
+                        "Content-Length: %d\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", plen, page);
+                    if (status_code) *status_code = 401;
+                    return plen;
+                }
+            }
+
             if (strcmp(routes[i].handler_name, "users_get") == 0)
             {
                 char *page = "<html><body><h1>Users</h1>"
@@ -311,6 +332,22 @@ int http_handle_request(int conn_fd, const http_request_t *req,
                     "Content-Type: text/html; charset=utf-8\r\n"
                     "Content-Length: %d\r\n"
                     "Connection: close\r\n"
+                    "\r\n%s", plen, page);
+                if (status_code) *status_code = 200;
+                return total;
+            }
+            if (strcmp(routes[i].handler_name, "secured_get") == 0)
+            {
+                char *page = "<html><body><h1>Secured Page</h1>"
+                    "<p>Welcome to the protected area.</p>"
+                    "</body></html>";
+                int plen = (int)strlen(page);
+                int total = dprintf(conn_fd,
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/html; charset=utf-8\r\n"
+                    "Content-Length: %d\r\n"
+                    "Connection: close\r\n"
+                    "Cache-Control: no-store\r\n"
                     "\r\n%s", plen, page);
                 if (status_code) *status_code = 200;
                 return total;
@@ -993,4 +1030,71 @@ static int handle_search(int conn_fd, const http_request_t *req,
     { *status_code = 500; return -1; }
     *status_code = 200;
     return total + result_len;
+}
+
+/* ================================================================
+ * W3D5: HTTP Basic 认证
+ * ================================================================ */
+
+/* ---- Base64 解码 ---- */
+static int base64_decode(const char *src, char *dst, int dst_sz)
+{
+    static const char table[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    int i = 0, j = 0;
+    unsigned char buf[4];
+    int buf_len = 0;
+    while (src[i] && src[i] != '=' && j < dst_sz - 1)
+    {
+        const char *p = strchr(table, src[i]);
+        if (p == NULL) { i++; continue; }
+        buf[buf_len++] = (unsigned char)(p - table);
+        if (buf_len == 4)
+        {
+            dst[j++] = (char)((buf[0] << 2) | (buf[1] >> 4));
+            if (j < dst_sz - 1 && buf[2] < 64)
+                dst[j++] = (char)((buf[1] << 4) | (buf[2] >> 2));
+            if (j < dst_sz - 1 && buf[3] < 64)
+                dst[j++] = (char)((buf[2] << 6) | buf[3]);
+            buf_len = 0;
+        }
+        i++;
+    }
+    /* 处理残留的不完整组 (因 = 或字符串结束而截断) */
+    if (buf_len >= 2)
+    {
+        dst[j++] = (char)((buf[0] << 2) | (buf[1] >> 4));
+        if (buf_len >= 3 && j < dst_sz - 1)
+            dst[j++] = (char)((buf[1] << 4) | (buf[2] >> 2));
+    }
+    dst[j] = '\0';
+    return j;
+}
+
+/* ---- Basic 认证校验 ---- */
+static int basic_auth_check(const http_request_t *req)
+{
+    const char *auth_hdr = http_get_header(req, "Authorization");
+    if (auth_hdr == NULL) return 401;
+
+    /* 检查 scheme 是否为 Basic */
+    if (strncasecmp(auth_hdr, "Basic ", 6) != 0) return 401;
+
+    /* Base64 解码 */
+    char decoded[256];
+    base64_decode(auth_hdr + 6, decoded, sizeof(decoded));
+
+    /* 按第一个冒号拆分 username:password */
+    char *colon = strchr(decoded, ':');
+    if (colon == NULL) return 401;
+    *colon = '\0';
+    const char *username = decoded;
+    const char *password = colon + 1;
+
+    /* 校验凭据 */
+    if (strcmp(username, "student") == 0 &&
+        strcmp(password, "lab123") == 0)
+        return 0;  /* 通过 */
+
+    return 401;  /* 凭据错误 */
 }
