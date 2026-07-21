@@ -141,7 +141,8 @@ int main(int argc, char *argv[])
             log_info("epoll_server: starting");
             epoll_server_run(config.host, config.port, users,
                              max_requests, config.document_root,
-                             config.routes, config.route_count);
+                             config.routes, config.route_count,
+                             config.log_path);
             log_info("epoll_server: finished");
             access_log_close();
 

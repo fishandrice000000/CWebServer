@@ -18,6 +18,7 @@ static int serve_static_file(int conn_fd, const char *real_path,
                              int *status_code);
 static int handle_search(int conn_fd, const http_request_t *req,
                          int *status_code);
+static void html_escape(const char *src, char *dst, int dst_sz);
 static int basic_auth_check(const http_request_t *req);
 static int base64_decode(const char *src, char *dst, int dst_sz);
 
@@ -275,7 +276,8 @@ int http_parse_request(const char *data, int len, http_request_t *req)
 int http_handle_request(int conn_fd, const http_request_t *req,
                         UserNode *users, int *status_code,
                         const char *doc_root,
-                        const route_config_t *routes, int route_count)
+                        const route_config_t *routes, int route_count,
+                        const char *log_path)
 {
     int status = 200;
 
@@ -292,15 +294,27 @@ int http_handle_request(int conn_fd, const http_request_t *req,
                 int auth_result = basic_auth_check(req);
                 if (auth_result != 0)
                 {
+                    /* 只有请求未携带 Authorization 头时才发送
+                     * WWW-Authenticate 挑战；已携带但凭据错误时
+                     * 不发送，避免浏览器弹出原生登录框 */
+                    const char *ah = http_get_header(req, "Authorization");
                     char *page = "401 Unauthorized\n";
                     int plen = (int)strlen(page);
-                    dprintf(conn_fd,
-                        "HTTP/1.1 401 Unauthorized\r\n"
-                        "WWW-Authenticate: Basic realm=\"mini_webserver\"\r\n"
-                        "Content-Type: text/plain\r\n"
-                        "Content-Length: %d\r\n"
-                        "Connection: close\r\n"
-                        "\r\n%s", plen, page);
+                    if (ah == NULL)
+                        dprintf(conn_fd,
+                            "HTTP/1.1 401 Unauthorized\r\n"
+                            "WWW-Authenticate: Basic realm=\"mini_webserver\"\r\n"
+                            "Content-Type: text/plain\r\n"
+                            "Content-Length: %d\r\n"
+                            "Connection: close\r\n"
+                            "\r\n%s", plen, page);
+                    else
+                        dprintf(conn_fd,
+                            "HTTP/1.1 401 Unauthorized\r\n"
+                            "Content-Type: text/plain\r\n"
+                            "Content-Length: %d\r\n"
+                            "Connection: close\r\n"
+                            "\r\n%s", plen, page);
                     if (status_code) *status_code = 401;
                     return plen;
                 }
@@ -308,16 +322,42 @@ int http_handle_request(int conn_fd, const http_request_t *req,
 
             if (strcmp(routes[i].handler_name, "users_get") == 0)
             {
-                char *page = "<html><body><h1>Users</h1>"
-                    "<p>GET /users — list users (placeholder)</p>"
-                    "</body></html>";
-                int plen = (int)strlen(page);
+                char *body = malloc(32768);
+                if (body == NULL) { *status_code = 500; return -1; }
+                int pos = snprintf(body, 32768,
+                    "<!DOCTYPE html>\n<html>\n"
+                    "<head><meta charset=\"UTF-8\">"
+                    "<title>Users</title></head>\n"
+                    "<body>\n<h1>User List</h1>\n"
+                    "<table border=\"1\"><tr>"
+                    "<th>#</th><th>Username</th><th>Phone</th></tr>\n");
+                int count = 0;
+                UserNode *p = users->next;
+                while (p != NULL && pos < 32000)
+                {
+                    count++;
+                    char euser[64], ephone[64];
+                    html_escape(p->data.username, euser, sizeof(euser));
+                    html_escape(p->data.phone,    ephone, sizeof(ephone));
+                    pos += snprintf(body + pos, 32768 - pos,
+                        "<tr><td>%d</td><td>%s</td><td>%s</td></tr>\n",
+                        count, euser, ephone);
+                    p = p->next;
+                }
+                if (count == 0)
+                    pos += snprintf(body + pos, 32768 - pos,
+                        "<tr><td colspan=\"3\">No users found</td></tr>\n");
+                pos += snprintf(body + pos, 32768 - pos,
+                    "</table>\n<p>Total: %d users</p>\n"
+                    "</body>\n</html>\n", count);
+
                 int total = dprintf(conn_fd,
                     "HTTP/1.1 200 OK\r\n"
                     "Content-Type: text/html; charset=utf-8\r\n"
                     "Content-Length: %d\r\n"
                     "Connection: close\r\n"
-                    "\r\n%s", plen, page);
+                    "\r\n%s", pos, body);
+                free(body);
                 if (status_code) *status_code = 200;
                 return total;
             }
@@ -349,6 +389,121 @@ int http_handle_request(int conn_fd, const http_request_t *req,
                     "Connection: close\r\n"
                     "Cache-Control: no-store\r\n"
                     "\r\n%s", plen, page);
+                if (status_code) *status_code = 200;
+                return total;
+            }
+            if (strcmp(routes[i].handler_name, "auth_checker") == 0)
+            {
+                /* 专用认证测试端点: 返回 JSON, 永不发送 WWW-Authenticate */
+                const char *ah = http_get_header(req, "Authorization");
+                if (ah == NULL)
+                {
+                    char *body = "{\"status\":401,\"error\":\"No credentials\"}\n";
+                    int blen = (int)strlen(body);
+                    dprintf(conn_fd,
+                        "HTTP/1.1 401 Unauthorized\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: %d\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", blen, body);
+                    if (status_code) *status_code = 401;
+                    return blen;
+                }
+                if (strncasecmp(ah, "Basic ", 6) != 0)
+                {
+                    char *body = "{\"status\":401,\"error\":\"Not Basic scheme\"}\n";
+                    int blen = (int)strlen(body);
+                    dprintf(conn_fd,
+                        "HTTP/1.1 401 Unauthorized\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: %d\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", blen, body);
+                    if (status_code) *status_code = 401;
+                    return blen;
+                }
+                char decoded[256];
+                base64_decode(ah + 6, decoded, sizeof(decoded));
+                char *colon = strchr(decoded, ':');
+                if (colon == NULL)
+                {
+                    char *body = "{\"status\":401,\"error\":\"Bad format\"}\n";
+                    int blen = (int)strlen(body);
+                    dprintf(conn_fd,
+                        "HTTP/1.1 401 Unauthorized\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: %d\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", blen, body);
+                    if (status_code) *status_code = 401;
+                    return blen;
+                }
+                *colon = '\0';
+                if (strcmp(decoded, "student") == 0 &&
+                    strcmp(colon + 1, "lab123") == 0)
+                {
+                    char *body = "{\"status\":200,\"message\":\"Welcome!\"}\n";
+                    int blen = (int)strlen(body);
+                    dprintf(conn_fd,
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: application/json\r\n"
+                        "Content-Length: %d\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", blen, body);
+                    if (status_code) *status_code = 200;
+                    return blen;
+                }
+                char *body = "{\"status\":401,\"error\":\"Invalid credentials\"}\n";
+                int blen = (int)strlen(body);
+                dprintf(conn_fd,
+                    "HTTP/1.1 401 Unauthorized\r\n"
+                    "Content-Type: application/json\r\n"
+                    "Content-Length: %d\r\n"
+                    "Connection: close\r\n"
+                    "\r\n%s", blen, body);
+                if (status_code) *status_code = 401;
+                return blen;
+            }
+            if (strcmp(routes[i].handler_name, "log_viewer") == 0)
+            {
+                /* 读取访问日志文件并返回 */
+                FILE *lfp = fopen(log_path, "r");
+                if (lfp == NULL)
+                {
+                    char *page = "502 Log unavailable\n";
+                    int plen = (int)strlen(page);
+                    dprintf(conn_fd,
+                        "HTTP/1.1 502 Bad Gateway\r\n"
+                        "Content-Type: text/plain\r\n"
+                        "Content-Length: %d\r\n"
+                        "Connection: close\r\n"
+                        "\r\n%s", plen, page);
+                    if (status_code) *status_code = 502;
+                    return plen;
+                }
+                /* 读取整个日志文件 */
+                fseek(lfp, 0, SEEK_END);
+                long fsize = ftell(lfp);
+                if (fsize > 65536) fsize = 65536;  /* 限制 64KB */
+                fseek(lfp, 0, SEEK_SET);
+                char *log_buf = malloc((size_t)fsize + 1);
+                if (log_buf == NULL)
+                {
+                    fclose(lfp);
+                    if (status_code) *status_code = 500;
+                    return -1;
+                }
+                size_t nread = fread(log_buf, 1, (size_t)fsize, lfp);
+                fclose(lfp);
+                log_buf[nread] = '\0';
+
+                int total = dprintf(conn_fd,
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: text/plain; charset=utf-8\r\n"
+                    "Content-Length: %zu\r\n"
+                    "Connection: close\r\n"
+                    "\r\n%s", nread, log_buf);
+                free(log_buf);
                 if (status_code) *status_code = 200;
                 return total;
             }

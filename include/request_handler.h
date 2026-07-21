@@ -43,7 +43,8 @@ int http_parse_request(const char *data, int len, http_request_t *req);
 int http_handle_request(int conn_fd, const http_request_t *req,
                         UserNode *users, int *status_code,
                         const char *doc_root,
-                        const route_config_t *routes, int route_count);
+                        const route_config_t *routes, int route_count,
+                        const char *log_path);
 
 /*
  * 从请求头中提取指定字段的值.

@@ -12,6 +12,8 @@
         {"method": "GET", "path": "/users", "handler": "users_get"},
         {"method": "POST", "path": "/users", "handler": "users_create"},
         {"method": "GET", "path": "/secured",
-         "handler": "secured_get", "auth": "basic"}
+         "handler": "secured_get", "auth": "basic"},
+        {"method": "GET", "path": "/api/logs", "handler": "log_viewer"},
+        {"method": "GET", "path": "/api/auth-check", "handler": "auth_checker"}
     ]
 }

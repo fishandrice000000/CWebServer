@@ -13,6 +13,7 @@
 
 int epoll_server_run(const char *host, int port, UserNode *users,
                      int max_requests, const char *doc_root,
-                     const route_config_t *routes, int route_count);
+                     const route_config_t *routes, int route_count,
+                     const char *log_path);
 
 #endif
