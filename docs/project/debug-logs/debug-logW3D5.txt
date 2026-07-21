@@ -1,0 +1,21 @@
+# Debug Log - W3D5 HTTP Basic 认证
+
+## 问题 1：Base64 解码截断 = 后缀
+
+# 原因
+base64_decode 的 while 条件为 src[i] != '=', 遇到 = 提前退出循环,
+导致 = 前已累积的 2~3 个 Base64 字符未被解码输出.
+student:lab123 被截断为 student:lab1.
+
+# 解决方法
+循环结束后处理残留的不完整组 (buf_len >= 2):
+2 字节 → 输出 1 字节; 3 字节 → 输出 2 字节.
+
+## 问题 2：secured_get handler 缺失
+
+# 原因
+路由匹配后只检查了 users_get 和 users_create handler,
+未实现 secured_get, 导致认证通过后无法生成响应.
+
+# 解决方法
+新增 secured_get handler, 返回受保护页面 HTML.
